@@ -192,6 +192,26 @@
     (should (eq (plist-get dark-palette :variant) 'dark))
     (should (eq (plist-get light-palette :variant) 'light))))
 
+(ert-deftest gypsum-test-palette-low-contrast-differs ()
+  "Test that low contrast palette differs from normal contrast."
+  (let* ((normal (gypsum-palette-create :seed "#3498DB" :variant 'dark :contrast 'normal))
+         (low (gypsum-palette-create :seed "#3498DB" :variant 'dark :contrast 'low)))
+    ;; Foreground should be darker in low contrast dark theme
+    (should-not (equal (plist-get normal :foreground)
+                       (plist-get low :foreground)))
+    ;; Semantic colors should be less saturated
+    (should-not (equal (plist-get normal :string)
+                       (plist-get low :string)))
+    (should-not (equal (plist-get normal :constant)
+                       (plist-get low :constant)))
+    (should-not (equal (plist-get normal :comment)
+                       (plist-get low :comment)))
+    (should-not (equal (plist-get normal :definition)
+                       (plist-get low :definition)))
+    ;; Contrast should be stored correctly
+    (should (eq (plist-get normal :contrast) 'normal))
+    (should (eq (plist-get low :contrast) 'low))))
+
 ;;; --- Face Generation Tests ---
 
 (ert-deftest gypsum-test-faces-generate ()

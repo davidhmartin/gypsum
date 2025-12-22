@@ -236,18 +236,19 @@ Success typically aligns with green, and string is usually green-ish."
 (defun gypsum-palette--apply-low-contrast (palette)
   "Apply low contrast adjustments to PALETTE."
   (let* ((variant (plist-get palette :variant))
-         (bg (plist-get palette :background))
          (fg (plist-get palette :foreground)))
     ;; Reduce contrast by moving fg closer to bg
-    (plist-put palette :foreground
-               (pcase variant
-                 ('light (gypsum-color-lighten fg 20))
-                 ('dark (gypsum-color-darken fg 15))))
+    (setq palette
+          (plist-put palette :foreground
+                     (pcase variant
+                       ('light (gypsum-color-lighten fg 20))
+                       ('dark (gypsum-color-darken fg 15)))))
     ;; Also adjust semantic colors to be less vibrant
     (dolist (key '(:string :constant :comment :definition))
       (let ((color (plist-get palette key)))
-        (plist-put palette key
-                   (gypsum-color-desaturate color 15))))
+        (setq palette
+              (plist-put palette key
+                         (gypsum-color-desaturate color 15)))))
     palette))
 
 ;;; --- Main Palette Creation ---
