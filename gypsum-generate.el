@@ -223,9 +223,9 @@ FACE-SPEC is (FACE-NAME ((CLASS ATTRS)))."
      "))"
      (gypsum-generate--footer name))))
 
-(cl-defun gypsum-generate (name &rest args &key seed variant contrast
-                                background string constant comment
-                                definition output load)
+(cl-defun gypsum-generate (name &rest args &key _seed _variant _contrast
+                                _background _string _constant _comment
+                                _definition output load)
   "Generate a theme file with NAME.
 
 Arguments:
@@ -235,13 +235,13 @@ Keyword arguments:
   :seed HEXCOLOR    - Base color (becomes definition), derive others
   :variant SYMBOL   - \\='light or \\='dark (required if no :background)
   :contrast SYMBOL  - \\='normal (default) or \\='low
-  :background HEX   - Background color (optional, derived from variant if omitted)
+  :background HEX   - Background color (optional, auto-derived)
   :string HEX       - Override string color
   :constant HEX     - Override constant color
   :comment HEX      - Override comment color
   :definition HEX   - Override definition color (defaults to :seed)
   :output PATH      - Output file path (optional)
-  :load BOOL        - Load and enable theme after generation (default t)
+  :load BOOL        - Load and enable after generation (default t)
 
 Returns the path to the generated theme file."
   ;; Validate name
@@ -278,9 +278,9 @@ Returns the path to the generated theme file."
       (message "Theme '%s' loaded and enabled" name))
     output-path))
 
-(cl-defun gypsum-generate-all (base-name &rest args &key seed
-                                         background string constant comment
-                                         definition output-dir load)
+(cl-defun gypsum-generate-all (base-name &rest args &key _seed
+                                         _background _string _constant _comment
+                                         _definition output-dir load)
   "Generate all 4 theme variants from BASE-NAME.
 
 Creates themes for all combinations of light/dark and normal/low contrast:

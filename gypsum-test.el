@@ -403,6 +403,30 @@
       ;; Cleanup
       (disable-theme theme-name))))
 
+(ert-deftest gypsum-test-derive-opposite-background ()
+  "Test deriving opposite variant backgrounds."
+  ;; Light background -> derive dark
+  (let* ((light-bg "#FDF6E3")  ; Solarized Light
+         (derived-dark (gypsum-ui--derive-opposite-background light-bg 'dark)))
+    ;; Derived should be dark
+    (should-not (gypsum-color-light-p derived-dark))
+    ;; Derived should be very dark (lightness ~6%)
+    (let ((dark-hsl (gypsum-color-hex-to-hsl derived-dark)))
+      (should (< (nth 2 dark-hsl) 10))))
+  ;; Dark background -> derive light
+  (let* ((dark-bg "#002B36")  ; Solarized Dark
+         (derived-light (gypsum-ui--derive-opposite-background dark-bg 'light)))
+    ;; Derived should be light
+    (should (gypsum-color-light-p derived-light))
+    ;; Derived should be very light (lightness ~97%)
+    (let ((light-hsl (gypsum-color-hex-to-hsl derived-light)))
+      (should (> (nth 2 light-hsl) 90))))
+  ;; Same variant -> return unchanged
+  (let ((light-bg "#F7F7F7"))
+    (should (equal (gypsum-ui--derive-opposite-background light-bg 'light) light-bg)))
+  (let ((dark-bg "#1A1A1A"))
+    (should (equal (gypsum-ui--derive-opposite-background dark-bg 'dark) dark-bg))))
+
 (provide 'gypsum-test)
 
 ;;; gypsum-test.el ends here

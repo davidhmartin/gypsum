@@ -29,6 +29,9 @@
 (defvar gypsum-ui--color-picker-current nil
   "Currently selected color in picker.")
 
+(defvar gypsum-ui--color-picker-colors nil
+  "Current color list being displayed in picker.")
+
 (defvar gypsum-ui--color-picker-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "RET") #'gypsum-ui--color-picker-select)
@@ -96,6 +99,52 @@
     ("#EEEEEE" "Light Alt"))
   "Curated color palette with names for easy selection.")
 
+(defun gypsum-ui--derive-opposite-background (background target-variant)
+  "Derive a background for TARGET-VARIANT from BACKGROUND's hue.
+If BACKGROUND is light and TARGET-VARIANT is \\='dark, derive a dark background.
+If BACKGROUND is dark and TARGET-VARIANT is \\='light, derive a light background.
+If they match, return BACKGROUND unchanged."
+  (let* ((bg-is-light (gypsum-color-light-p background))
+         (target-is-light (eq target-variant 'light)))
+    (if (eq bg-is-light target-is-light)
+        ;; Same type, use as-is
+        background
+      ;; Opposite type, derive from hue
+      (let ((hsl (gypsum-color-hex-to-hsl background)))
+        (if target-is-light
+            ;; Derive light background
+            (gypsum-color-hsl-to-hex (nth 0 hsl) 5.0 97.0)
+          ;; Derive dark background
+          (gypsum-color-hsl-to-hex (nth 0 hsl) 10.0 6.0))))))
+
+(defvar gypsum-ui--background-colors
+  '(;; Dark backgrounds
+    ("#000000" "Black")
+    ("#0E1011" "Near Black")
+    ("#0E1415" "Dark Teal BG")
+    ("#121212" "Dark Gray")
+    ("#1A1A1A" "Charcoal")
+    ("#1A2122" "Dark Alt")
+    ("#1E1E1E" "VS Code Dark")
+    ("#212121" "Material Dark")
+    ("#263238" "Blue Gray Dark")
+    ("#282C34" "One Dark")
+    ("#2E3440" "Nord Dark")
+    ;; Light backgrounds
+    ("#ECEFF4" "Nord Light")
+    ("#EEEEEE" "Light Gray")
+    ("#F5F5F5" "White Smoke")
+    ("#F7F7F7" "Off White")
+    ("#FAFAFA" "Snow")
+    ("#FEFEFE" "Near White")
+    ("#FFFFFF" "White")
+    ;; Tinted backgrounds
+    ("#FDF6E3" "Solarized Light")
+    ("#002B36" "Solarized Dark")
+    ("#FFFBF0" "Warm White")
+    ("#F0F4F8" "Cool White"))
+  "Background colors optimized for theme backgrounds.")
+
 (defun gypsum-ui--color-picker-format-line (color name)
   "Format a line for COLOR with NAME in the picker buffer."
   (let* ((swatch (propertize "    " 'face `(:background ,color)))
@@ -130,6 +179,25 @@
       (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
     (insert "\n" (propertize "Backgrounds\n" 'face 'bold))
     (dolist (c (seq-subseq gypsum-ui--curated-colors 36))
+      (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
+    (goto-char (point-min))
+    (forward-line 5)))
+
+(defun gypsum-ui--color-picker-insert-backgrounds ()
+  "Insert background color swatches into the picker buffer."
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (insert (propertize "Gypsum Background Color Picker\n" 'face 'bold))
+    (insert "═══════════════════════════════════════\n\n")
+    (insert "RET: select, s: search by name, h: enter hex, q: quit\n\n")
+    (insert (propertize "Dark Backgrounds\n" 'face 'bold))
+    (dolist (c (seq-take gypsum-ui--background-colors 11))
+      (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
+    (insert "\n" (propertize "Light Backgrounds\n" 'face 'bold))
+    (dolist (c (seq-subseq gypsum-ui--background-colors 11 18))
+      (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
+    (insert "\n" (propertize "Tinted Backgrounds\n" 'face 'bold))
+    (dolist (c (seq-subseq gypsum-ui--background-colors 18))
       (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
     (goto-char (point-min))
     (forward-line 5)))
@@ -172,10 +240,11 @@
 (defun gypsum-ui--color-picker-select-by-name ()
   "Select a color by searching for its name."
   (interactive)
-  (let* ((names (mapcar #'cadr gypsum-ui--curated-colors))
+  (let* ((colors (or gypsum-ui--color-picker-colors gypsum-ui--curated-colors))
+         (names (mapcar #'cadr colors))
          (selected-name (completing-read "Color name: " names nil t))
          (color-entry (seq-find (lambda (c) (string= (cadr c) selected-name))
-                                gypsum-ui--curated-colors)))
+                                colors)))
     (when color-entry
       (setq gypsum-ui--color-picker-current (car color-entry))
       (quit-window)
@@ -184,16 +253,24 @@
         ;; Exit recursive-edit for synchronous mode
         (exit-recursive-edit)))))
 
-(defun gypsum-ui--pick-color (prompt &optional callback)
+(defun gypsum-ui--pick-color (prompt &optional callback category)
   "Display color picker with PROMPT.
 If CALLBACK is provided, call it with the selected color.
-Otherwise, return the selected color synchronously."
+Otherwise, return the selected color synchronously.
+CATEGORY can be \\='backgrounds to show only background colors."
   (let ((buf (get-buffer-create "*Gypsum Colors*")))
     (setq gypsum-ui--color-picker-callback callback)
     (setq gypsum-ui--color-picker-current nil)
+    ;; Set the colors list based on category
+    (setq gypsum-ui--color-picker-colors
+          (pcase category
+            ('backgrounds gypsum-ui--background-colors)
+            (_ gypsum-ui--curated-colors)))
     (with-current-buffer buf
       (gypsum-ui--color-picker-mode)
-      (gypsum-ui--color-picker-insert-colors))
+      (pcase category
+        ('backgrounds (gypsum-ui--color-picker-insert-backgrounds))
+        (_ (gypsum-ui--color-picker-insert-colors))))
     (pop-to-buffer buf)
     (message "%s" prompt)
     (unless callback
@@ -338,7 +415,7 @@ Guides you through selecting colors and which variants to generate."
       (error "At least one variant must be selected"))
     ;; Optional: custom background
     (when (yes-or-no-p "Customize background color? (default is auto-generated) ")
-      (setq background (gypsum-ui--pick-color "Select background color:")))
+      (setq background (gypsum-ui--pick-color "Select background color:" nil 'backgrounds)))
     ;; Optional: override individual semantic colors
     (when (yes-or-no-p "Customize individual colors? ")
       (when (yes-or-no-p "Customize string color? ")
@@ -347,9 +424,8 @@ Guides you through selecting colors and which variants to generate."
         (setq constant-override (gypsum-ui--pick-color "Select constant color:")))
       (when (yes-or-no-p "Customize comment color? ")
         (setq comment-override (gypsum-ui--pick-color "Select comment color:"))))
-    ;; Build base args (without variant/contrast)
+    ;; Build base args (without variant/contrast/background - those are per-variant)
     (setq base-args (list :seed seed))
-    (when background (setq base-args (plist-put base-args :background background)))
     (when string-override (setq base-args (plist-put base-args :string string-override)))
     (when constant-override (setq base-args (plist-put base-args :constant constant-override)))
     (when comment-override (setq base-args (plist-put base-args :comment comment-override)))
@@ -357,9 +433,14 @@ Guides you through selecting colors and which variants to generate."
     (when (yes-or-no-p "Preview the theme before saving? ")
       (let* ((first-variant (car variants))
              (variant-spec (cdr (assoc first-variant gypsum-ui--variant-options)))
-             (preview-args (copy-sequence base-args)))
-        (setq preview-args (plist-put preview-args :variant (car variant-spec)))
+             (preview-variant (car variant-spec))
+             (preview-args (copy-sequence base-args))
+             (preview-bg (when background
+                           (gypsum-ui--derive-opposite-background background preview-variant))))
+        (setq preview-args (plist-put preview-args :variant preview-variant))
         (setq preview-args (plist-put preview-args :contrast (cdr variant-spec)))
+        (when preview-bg
+          (setq preview-args (plist-put preview-args :background preview-bg)))
         (gypsum-ui--preview preview-args)
         (unless (yes-or-no-p "Continue with theme generation? ")
           (gypsum-preview-dismiss)
@@ -379,10 +460,15 @@ Guides you through selecting colors and which variants to generate."
              (output-path (expand-file-name
                            (format "%s-theme.el" theme-name)
                            output-dir))
-             (args (copy-sequence base-args)))
+             (args (copy-sequence base-args))
+             ;; Derive appropriate background for this variant
+             (variant-bg (when background
+                           (gypsum-ui--derive-opposite-background background variant))))
         (setq args (plist-put args :variant variant))
         (setq args (plist-put args :contrast contrast))
         (setq args (plist-put args :output output-path))
+        (when variant-bg
+          (setq args (plist-put args :background variant-bg)))
         (apply #'gypsum-generate theme-name args)
         (push theme-name generated-files)))
     ;; Dismiss preview if still active
