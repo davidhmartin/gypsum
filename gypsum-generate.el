@@ -18,9 +18,6 @@
 (require 'gypsum-palette)
 (require 'gypsum-faces)
 
-;; Declared here to avoid circular dependency; gypsum-ui.el is loaded after this
-(declare-function gypsum-pick-color "gypsum-ui")
-
 ;;; --- Configuration ---
 
 (defcustom gypsum-output-directory

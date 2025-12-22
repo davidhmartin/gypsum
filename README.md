@@ -142,14 +142,6 @@ See what colors would be generated from a seed:
 M-x gypsum-show-palette
 ```
 
-### Color Picker
-
-Visual color selection:
-
-```
-M-x gypsum-pick-color-interactive
-```
-
 ## Options
 
 | Option | Values | Description |
@@ -218,19 +210,17 @@ Generate sample themes:
 
 ### Theme Generation
 
-- `gypsum-generate` - Generate and save a theme file
-- `gypsum-generate-all` - Generate all 4 variants (light/dark × normal/low contrast)
-- `gypsum-generate-theme` - Interactive theme generation
+- `gypsum` - Interactive theme generation (guided wizard)
+- `gypsum-generate` - Generate and save a theme file (programmatic)
+- `gypsum-generate-all` - Generate all 4 variants (programmatic)
 
 ### Preview
 
-- `gypsum-preview` - Preview theme without saving
 - `gypsum-preview-dismiss` - Dismiss current preview
 - `gypsum-show-palette` - Display palette for a seed
 
 ### Color Tools
 
-- `gypsum-pick-color-interactive` - Visual color picker
 - `gypsum-palette-create` - Create palette programmatically
 
 ### Color Manipulation

@@ -67,9 +67,6 @@
 ;;   ;; Show palette preview
 ;;   M-x gypsum-show-palette
 ;;
-;;   ;; Pick a color interactively
-;;   M-x gypsum-pick-color-interactive
-;;
 ;; For more information on the philosophy behind this approach, see:
 ;; https://tonsky.me/blog/syntax-highlighting/
 
@@ -92,16 +89,13 @@
 ;;; --- Public API Summary ---
 
 ;; Theme Generation:
+;;   `gypsum'                    - Main interactive command (guided)
 ;;   `gypsum-generate'           - Generate a theme file (programmatic)
-;;   `gypsum-generate-theme'     - Generate a theme (interactive, guided)
+;;   `gypsum-generate-all'       - Generate all 4 variants (programmatic)
 ;;
 ;; Preview:
-;;   `gypsum-preview'            - Preview theme without saving
 ;;   `gypsum-preview-dismiss'    - Dismiss current preview
 ;;   `gypsum-show-palette'       - Show palette colors for a seed
-;;
-;; Color Tools:
-;;   `gypsum-pick-color-interactive' - Visual color picker
 ;;
 ;; Palette Creation:
 ;;   `gypsum-palette-create'     - Create a palette programmatically
