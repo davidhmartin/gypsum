@@ -475,13 +475,14 @@ Guides you through selecting colors and which variants to generate."
     (when gypsum-ui--preview-active-theme
       (gypsum-preview-dismiss))
     ;; Report what was generated
+    (setq generated-files (nreverse generated-files))
     (message "Generated %d theme(s): %s"
              (length generated-files)
-             (mapconcat #'identity (nreverse generated-files) ", "))
+             (mapconcat #'identity generated-files ", "))
     ;; Offer to load a theme
     (when (yes-or-no-p "Load one of the generated themes now? ")
       (let ((to-load (completing-read "Load theme: "
-                                      (nreverse generated-files)
+                                      generated-files
                                       nil t)))
         (load-theme (intern to-load) t)
         (message "Theme '%s' loaded!" to-load)))))
