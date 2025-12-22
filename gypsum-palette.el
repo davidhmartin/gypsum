@@ -20,11 +20,6 @@
 
 ;;; --- Configuration ---
 
-(defgroup gypsum nil
-  "Emacs theme generator following Alabaster principles."
-  :group 'faces
-  :prefix "gypsum-")
-
 (defcustom gypsum-string-hue-offset -120
   "Hue rotation from seed to derive string color."
   :type 'number

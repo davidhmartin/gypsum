@@ -3,7 +3,7 @@
 ;; Copyright (C) 2025
 
 ;; Author: Gypsum Contributors
-;; URL: https://github.com/your-username/gypsum
+;; URL: https://github.com/davidhmartin/gypsum
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: faces, themes, tools
@@ -86,7 +86,7 @@
   "Generate Alabaster-style Emacs themes."
   :group 'faces
   :prefix "gypsum-"
-  :link '(url-link :tag "GitHub" "https://github.com/your-username/gypsum")
+  :link '(url-link :tag "GitHub" "https://github.com/davidhmartin/gypsum")
   :link '(url-link :tag "Alabaster Philosophy" "https://tonsky.me/blog/syntax-highlighting/"))
 
 ;;; --- Public API Summary ---

@@ -202,6 +202,9 @@ Otherwise, return the selected color synchronously."
 (defvar gypsum-preview--original-theme nil
   "Theme that was active before preview.")
 
+(defvar gypsum-preview--current-args nil
+  "Arguments used to create the current preview, for saving.")
+
 (defun gypsum-preview--create-temp-theme (palette)
   "Create a temporary theme from PALETTE for preview."
   (let* ((theme-name (intern (format "gypsum-preview-%s" (random 10000))))
@@ -233,6 +236,8 @@ Use `gypsum-preview-dismiss' to remove the preview."
   ;; Disable current preview if any
   (when gypsum-preview--active-theme
     (disable-theme gypsum-preview--active-theme))
+  ;; Store args for potential save
+  (setq gypsum-preview--current-args args)
   ;; Create palette and temp theme
   (let* ((palette (apply #'gypsum-palette-create args))
          (temp-theme (gypsum-preview--create-temp-theme palette)))
@@ -250,6 +255,7 @@ Use `gypsum-preview-dismiss' to remove the preview."
   (when gypsum-preview--original-theme
     (enable-theme gypsum-preview--original-theme)
     (setq gypsum-preview--original-theme nil))
+  (setq gypsum-preview--current-args nil)
   (message "Preview dismissed"))
 
 ;;;###autoload
@@ -258,8 +264,21 @@ Use `gypsum-preview-dismiss' to remove the preview."
   (interactive "sTheme name: ")
   (unless gypsum-preview--active-theme
     (error "No preview is currently active"))
-  ;; Re-generate and save (we'd need to store the palette, simplified here)
-  (message "Use M-x gypsum-generate-theme to save the theme with your settings"))
+  (unless gypsum-preview--current-args
+    (error "No preview settings available to save"))
+  (let* ((output-dir (read-directory-name
+                      "Output directory: "
+                      gypsum-output-directory))
+         (output-path (expand-file-name
+                       (format "%s-theme.el" name)
+                       output-dir)))
+    (apply #'gypsum-generate name
+           :output output-path
+           gypsum-preview--current-args)
+    ;; Dismiss the preview and load the saved theme
+    (gypsum-preview-dismiss)
+    (load-theme (intern name) t)
+    (message "Theme '%s' saved and loaded!" name)))
 
 ;;; --- Interactive Theme Generator ---
 
@@ -308,18 +327,20 @@ Guides you through selecting colors and options, with preview."
     (when (string-suffix-p "-theme" name)
       (setq name (substring name 0 -6)))
     ;; Get seed color
-    (message "Select your seed/definition color (this sets the theme's character)...")
-    (setq seed (gypsum--read-color "Seed color (e.g., #3498db or pick from list)"))
+    (setq seed (gypsum-pick-color "Select seed color (this sets the theme's character):"))
     (unless seed
       (error "Seed color is required"))
     ;; Optional: custom background
     (when (yes-or-no-p "Customize background color? (default is auto-generated) ")
-      (setq background (gypsum--read-color "Background color")))
+      (setq background (gypsum-pick-color "Select background color:")))
     ;; Optional: override individual semantic colors
     (when (gypsum--ask-override-p)
-      (setq string-override (gypsum--read-color "String color (Enter to skip)"))
-      (setq constant-override (gypsum--read-color "Constant color (Enter to skip)"))
-      (setq comment-override (gypsum--read-color "Comment color (Enter to skip)")))
+      (when (yes-or-no-p "Customize string color? ")
+        (setq string-override (gypsum-pick-color "Select string color:")))
+      (when (yes-or-no-p "Customize constant color? ")
+        (setq constant-override (gypsum-pick-color "Select constant color:")))
+      (when (yes-or-no-p "Customize comment color? ")
+        (setq comment-override (gypsum-pick-color "Select comment color:"))))
     ;; Build args
     (setq args (list :seed seed :variant variant :contrast contrast))
     (when background (setq args (plist-put args :background background)))
@@ -355,7 +376,7 @@ Guides you through selecting colors and options, with preview."
 (defun gypsum-show-palette (seed variant)
   "Display the palette that would be generated from SEED for VARIANT."
   (interactive
-   (list (gypsum--read-color "Seed color")
+   (list (gypsum-pick-color "Select seed color:")
          (gypsum--read-variant)))
   (let* ((palette (gypsum-palette-create :seed seed :variant variant))
          (buf (get-buffer-create "*Gypsum Palette*")))
