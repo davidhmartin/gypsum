@@ -36,6 +36,7 @@
     (define-key map (kbd "n") #'next-line)
     (define-key map (kbd "p") #'previous-line)
     (define-key map (kbd "h") #'gypsum-ui--color-picker-enter-hex)
+    (define-key map (kbd "s") #'gypsum-ui--color-picker-select-by-name)
     map)
   "Keymap for color picker buffer.")
 
@@ -108,7 +109,7 @@
     (erase-buffer)
     (insert (propertize "Gypsum Color Picker\n" 'face 'bold))
     (insert "═══════════════════════════════════════\n\n")
-    (insert "Use arrow keys to navigate, RET to select, h for hex input, q to quit\n\n")
+    (insert "RET: select, s: search by name, h: enter hex, q: quit\n\n")
     (insert (propertize "Blues\n" 'face 'bold))
     (dolist (c (seq-take gypsum-ui--curated-colors 6))
       (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
@@ -165,6 +166,21 @@
       (quit-window)
       (if gypsum-ui--color-picker-callback
           (funcall gypsum-ui--color-picker-callback color)
+        ;; Exit recursive-edit for synchronous mode
+        (exit-recursive-edit)))))
+
+(defun gypsum-ui--color-picker-select-by-name ()
+  "Select a color by searching for its name."
+  (interactive)
+  (let* ((names (mapcar #'cadr gypsum-ui--curated-colors))
+         (selected-name (completing-read "Color name: " names nil t))
+         (color-entry (seq-find (lambda (c) (string= (cadr c) selected-name))
+                                gypsum-ui--curated-colors)))
+    (when color-entry
+      (setq gypsum-ui--color-picker-current (car color-entry))
+      (quit-window)
+      (if gypsum-ui--color-picker-callback
+          (funcall gypsum-ui--color-picker-callback (car color-entry))
         ;; Exit recursive-edit for synchronous mode
         (exit-recursive-edit)))))
 
