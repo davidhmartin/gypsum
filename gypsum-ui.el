@@ -208,18 +208,23 @@ Otherwise, return the selected color synchronously."
 (defun gypsum-preview--create-temp-theme (palette)
   "Create a temporary theme from PALETTE for preview."
   (let* ((theme-name (intern (format "gypsum-preview-%s" (random 10000))))
-         (face-specs (gypsum-faces-generate palette)))
+         (face-specs (gypsum-faces-generate palette))
+         (face-list nil))
     ;; Properly declare the theme so custom-theme-set-faces recognizes it
     (custom-declare-theme theme-name nil)
     (put theme-name 'theme-settings nil)
-    (apply #'custom-theme-set-faces theme-name
+    ;; Build the face specs and track which faces we're setting
+    (let ((theme-specs
            (mapcar (lambda (spec)
                      ;; spec structure: (FACE-NAME ((CLASS-DISPLAY ATTRS)))
                      (let ((face (car spec))
                            (attrs (cadr (caadr spec))))
+                       (push face face-list)
                        `(,face ((t ,attrs)))))
-                   face-specs))
-    theme-name))
+                   face-specs)))
+      (apply #'custom-theme-set-faces theme-name theme-specs))
+    ;; Return both theme name and face list for recalculation
+    (cons theme-name face-list)))
 
 ;;;###autoload
 (cl-defun gypsum-preview (&rest args &key seed variant contrast
@@ -241,9 +246,17 @@ Use `gypsum-preview-dismiss' to remove the preview."
   (setq gypsum-preview--current-args args)
   ;; Create palette and temp theme
   (let* ((palette (apply #'gypsum-palette-create args))
-         (temp-theme (gypsum-preview--create-temp-theme palette)))
-    (setq gypsum-preview--active-theme temp-theme)
-    (enable-theme temp-theme)
+         (result (gypsum-preview--create-temp-theme palette))
+         (theme-name (car result))
+         (face-list (cdr result)))
+    (setq gypsum-preview--active-theme theme-name)
+    (enable-theme theme-name)
+    ;; Force face recalculation for all affected faces
+    (dolist (face face-list)
+      (when (facep face)
+        (face-spec-recalc face nil)))
+    ;; Redisplay to ensure changes are visible
+    (redraw-display)
     (message "Preview active. Use M-x gypsum-preview-dismiss to remove, or M-x gypsum-preview-save to save.")))
 
 ;;;###autoload

@@ -386,7 +386,9 @@
 (ert-deftest gypsum-test-preview-create-temp-theme ()
   "Test that preview creates a valid temporary theme."
   (let* ((palette (gypsum-palette-create :seed "#3498DB" :variant 'dark))
-         (theme-name (gypsum-preview--create-temp-theme palette)))
+         (result (gypsum-preview--create-temp-theme palette))
+         (theme-name (car result))
+         (face-list (cdr result)))
     (unwind-protect
         (progn
           ;; Theme should be a symbol
@@ -394,7 +396,10 @@
           ;; Theme should be declared
           (should (custom-theme-p theme-name))
           ;; Theme should have face settings
-          (should (get theme-name 'theme-settings)))
+          (should (get theme-name 'theme-settings))
+          ;; Face list should be non-empty
+          (should (listp face-list))
+          (should (> (length face-list) 0)))
       ;; Cleanup
       (disable-theme theme-name))))
 
