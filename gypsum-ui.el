@@ -10,9 +10,9 @@
 ;;; Commentary:
 
 ;; Interactive commands for Gypsum theme generator:
-;; - `gypsum-generate-theme' - guided theme creation
-;; - `gypsum-preview' - live preview without writing file
-;; - `gypsum-pick-color' - visual color picker
+;; - `gypsum' - main entry point for theme generation
+;; - `gypsum-preview-dismiss' - dismiss active preview
+;; - `gypsum-show-palette' - display generated palette colors
 
 ;;; Code:
 
@@ -23,28 +23,29 @@
 
 ;;; --- Color Picker ---
 
-(defvar gypsum-color-picker-callback nil
+(defvar gypsum-ui--color-picker-callback nil
   "Callback function for color picker.")
 
-(defvar gypsum-color-picker-current nil
+(defvar gypsum-ui--color-picker-current nil
   "Currently selected color in picker.")
 
-(defvar gypsum-color-picker-mode-map
+(defvar gypsum-ui--color-picker-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "RET") #'gypsum-color-picker-select)
-    (define-key map (kbd "q") #'gypsum-color-picker-quit)
+    (define-key map (kbd "RET") #'gypsum-ui--color-picker-select)
+    (define-key map (kbd "q") #'gypsum-ui--color-picker-quit)
     (define-key map (kbd "n") #'next-line)
     (define-key map (kbd "p") #'previous-line)
-    (define-key map (kbd "h") #'gypsum-color-picker-enter-hex)
+    (define-key map (kbd "h") #'gypsum-ui--color-picker-enter-hex)
     map)
   "Keymap for color picker buffer.")
 
-(define-derived-mode gypsum-color-picker-mode special-mode "Gypsum-Color"
+(define-derived-mode gypsum-ui--color-picker-mode special-mode "Gypsum-Color"
   "Major mode for Gypsum color picker."
+  :keymap gypsum-ui--color-picker-mode-map
   (setq cursor-type 'box)
   (setq buffer-read-only t))
 
-(defvar gypsum-curated-colors
+(defvar gypsum-ui--curated-colors
   '(;; Blues
     ("#1E3A5F" "Deep Navy")
     ("#2563EB" "Royal Blue")
@@ -94,14 +95,14 @@
     ("#EEEEEE" "Light Alt"))
   "Curated color palette with names for easy selection.")
 
-(defun gypsum-color-picker--format-color-line (color name)
+(defun gypsum-ui--color-picker-format-line (color name)
   "Format a line for COLOR with NAME in the picker buffer."
   (let* ((swatch (propertize "    " 'face `(:background ,color)))
          (text (format " %s  %s" color name)))
     (propertize (concat swatch text "\n")
                 'gypsum-color color)))
 
-(defun gypsum-color-picker--insert-colors ()
+(defun gypsum-ui--color-picker-insert-colors ()
   "Insert color swatches into the picker buffer."
   (let ((inhibit-read-only t))
     (erase-buffer)
@@ -109,103 +110,93 @@
     (insert "═══════════════════════════════════════\n\n")
     (insert "Use arrow keys to navigate, RET to select, h for hex input, q to quit\n\n")
     (insert (propertize "Blues\n" 'face 'bold))
-    (dolist (c (seq-take gypsum-curated-colors 6))
-      (insert (gypsum-color-picker--format-color-line (car c) (cadr c))))
+    (dolist (c (seq-take gypsum-ui--curated-colors 6))
+      (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
     (insert "\n" (propertize "Greens\n" 'face 'bold))
-    (dolist (c (seq-subseq gypsum-curated-colors 6 12))
-      (insert (gypsum-color-picker--format-color-line (car c) (cadr c))))
+    (dolist (c (seq-subseq gypsum-ui--curated-colors 6 12))
+      (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
     (insert "\n" (propertize "Purples\n" 'face 'bold))
-    (dolist (c (seq-subseq gypsum-curated-colors 12 18))
-      (insert (gypsum-color-picker--format-color-line (car c) (cadr c))))
+    (dolist (c (seq-subseq gypsum-ui--curated-colors 12 18))
+      (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
     (insert "\n" (propertize "Reds/Pinks\n" 'face 'bold))
-    (dolist (c (seq-subseq gypsum-curated-colors 18 24))
-      (insert (gypsum-color-picker--format-color-line (car c) (cadr c))))
+    (dolist (c (seq-subseq gypsum-ui--curated-colors 18 24))
+      (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
     (insert "\n" (propertize "Oranges/Yellows\n" 'face 'bold))
-    (dolist (c (seq-subseq gypsum-curated-colors 24 30))
-      (insert (gypsum-color-picker--format-color-line (car c) (cadr c))))
+    (dolist (c (seq-subseq gypsum-ui--curated-colors 24 30))
+      (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
     (insert "\n" (propertize "Teals/Cyans\n" 'face 'bold))
-    (dolist (c (seq-subseq gypsum-curated-colors 30 36))
-      (insert (gypsum-color-picker--format-color-line (car c) (cadr c))))
+    (dolist (c (seq-subseq gypsum-ui--curated-colors 30 36))
+      (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
     (insert "\n" (propertize "Backgrounds\n" 'face 'bold))
-    (dolist (c (seq-subseq gypsum-curated-colors 36))
-      (insert (gypsum-color-picker--format-color-line (car c) (cadr c))))
+    (dolist (c (seq-subseq gypsum-ui--curated-colors 36))
+      (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
     (goto-char (point-min))
     (forward-line 5)))
 
-(defun gypsum-color-picker-select ()
+(defun gypsum-ui--color-picker-select ()
   "Select the color on the current line."
   (interactive)
   (let ((color (get-text-property (point) 'gypsum-color)))
     (if color
         (progn
-          (setq gypsum-color-picker-current color)
+          (setq gypsum-ui--color-picker-current color)
           (quit-window)
-          (if gypsum-color-picker-callback
-              (funcall gypsum-color-picker-callback color)
+          (if gypsum-ui--color-picker-callback
+              (funcall gypsum-ui--color-picker-callback color)
             ;; Exit recursive-edit for synchronous mode
             (exit-recursive-edit)))
       (message "No color on this line"))))
 
-(defun gypsum-color-picker-quit ()
+(defun gypsum-ui--color-picker-quit ()
   "Quit the color picker without selecting."
   (interactive)
-  (setq gypsum-color-picker-current nil)
+  (setq gypsum-ui--color-picker-current nil)
   (quit-window)
   ;; Exit recursive-edit for synchronous mode
-  (unless gypsum-color-picker-callback
+  (unless gypsum-ui--color-picker-callback
     (exit-recursive-edit)))
 
-(defun gypsum-color-picker-enter-hex ()
+(defun gypsum-ui--color-picker-enter-hex ()
   "Enter a hex color code manually."
   (interactive)
   (let ((color (read-string "Hex color (e.g., #3498db): ")))
     (when (string-match-p "^#[0-9A-Fa-f]\\{6\\}$" color)
-      (setq gypsum-color-picker-current color)
+      (setq gypsum-ui--color-picker-current color)
       (quit-window)
-      (if gypsum-color-picker-callback
-          (funcall gypsum-color-picker-callback color)
+      (if gypsum-ui--color-picker-callback
+          (funcall gypsum-ui--color-picker-callback color)
         ;; Exit recursive-edit for synchronous mode
         (exit-recursive-edit)))))
 
-(defun gypsum-pick-color (prompt &optional callback)
+(defun gypsum-ui--pick-color (prompt &optional callback)
   "Display color picker with PROMPT.
 If CALLBACK is provided, call it with the selected color.
 Otherwise, return the selected color synchronously."
   (let ((buf (get-buffer-create "*Gypsum Colors*")))
-    (setq gypsum-color-picker-callback callback)
-    (setq gypsum-color-picker-current nil)
+    (setq gypsum-ui--color-picker-callback callback)
+    (setq gypsum-ui--color-picker-current nil)
     (with-current-buffer buf
-      (gypsum-color-picker-mode)
-      (gypsum-color-picker--insert-colors))
+      (gypsum-ui--color-picker-mode)
+      (gypsum-ui--color-picker-insert-colors))
     (pop-to-buffer buf)
     (message "%s" prompt)
     (unless callback
       ;; Synchronous mode - wait for selection
       (recursive-edit)
-      gypsum-color-picker-current)))
-
-;;;###autoload
-(defun gypsum-pick-color-interactive ()
-  "Interactively pick a color and insert or display it."
-  (interactive)
-  (gypsum-pick-color "Select a color:"
-                     (lambda (color)
-                       (message "Selected: %s" color)
-                       (when (yes-or-no-p "Insert at point? ")
-                         (insert color)))))
+      gypsum-ui--color-picker-current)))
 
 ;;; --- Live Preview ---
 
-(defvar gypsum-preview--active-theme nil
+(defvar gypsum-ui--preview-active-theme nil
   "Currently active preview theme.")
 
-(defvar gypsum-preview--original-theme nil
+(defvar gypsum-ui--preview-original-theme nil
   "Theme that was active before preview.")
 
-(defvar gypsum-preview--current-args nil
+(defvar gypsum-ui--preview-current-args nil
   "Arguments used to create the current preview, for saving.")
 
-(defun gypsum-preview--create-temp-theme (palette)
+(defun gypsum-ui--preview-create-temp-theme (palette)
   "Create a temporary theme from PALETTE for preview."
   (let* ((theme-name (intern (format "gypsum-preview-%s" (random 10000))))
          (face-specs (gypsum-faces-generate palette))
@@ -226,30 +217,23 @@ Otherwise, return the selected color synchronously."
     ;; Return both theme name and face list for recalculation
     (cons theme-name face-list)))
 
-;;;###autoload
-(cl-defun gypsum-preview (&rest args &key seed variant contrast
-                                background string constant comment definition)
-  "Preview a theme without writing a file.
-
-Takes the same arguments as `gypsum-generate'.
+(defun gypsum-ui--preview (args)
+  "Preview a theme with ARGS (plist).
 Use `gypsum-preview-dismiss' to remove the preview."
-  (interactive
-   (list :seed (gypsum-pick-color "Select seed color:")
-         :variant (intern (completing-read "Variant: " '("dark" "light")))))
   ;; Store current theme
-  (setq gypsum-preview--original-theme
+  (setq gypsum-ui--preview-original-theme
         (car custom-enabled-themes))
   ;; Disable current preview if any
-  (when gypsum-preview--active-theme
-    (disable-theme gypsum-preview--active-theme))
+  (when gypsum-ui--preview-active-theme
+    (disable-theme gypsum-ui--preview-active-theme))
   ;; Store args for potential save
-  (setq gypsum-preview--current-args args)
+  (setq gypsum-ui--preview-current-args args)
   ;; Create palette and temp theme
   (let* ((palette (apply #'gypsum-palette-create args))
-         (result (gypsum-preview--create-temp-theme palette))
+         (result (gypsum-ui--preview-create-temp-theme palette))
          (theme-name (car result))
          (face-list (cdr result)))
-    (setq gypsum-preview--active-theme theme-name)
+    (setq gypsum-ui--preview-active-theme theme-name)
     (enable-theme theme-name)
     ;; Force face recalculation for all affected faces
     (dolist (face face-list)
@@ -257,132 +241,148 @@ Use `gypsum-preview-dismiss' to remove the preview."
         (face-spec-recalc face nil)))
     ;; Redisplay to ensure changes are visible
     (redraw-display)
-    (message "Preview active. Use M-x gypsum-preview-dismiss to remove, or M-x gypsum-preview-save to save.")))
+    (message "Preview active. Use M-x gypsum-preview-dismiss to remove.")))
 
 ;;;###autoload
 (defun gypsum-preview-dismiss ()
   "Dismiss the current theme preview."
   (interactive)
-  (when gypsum-preview--active-theme
-    (disable-theme gypsum-preview--active-theme)
-    (setq gypsum-preview--active-theme nil))
-  (when gypsum-preview--original-theme
-    (enable-theme gypsum-preview--original-theme)
-    (setq gypsum-preview--original-theme nil))
-  (setq gypsum-preview--current-args nil)
+  (when gypsum-ui--preview-active-theme
+    (disable-theme gypsum-ui--preview-active-theme)
+    (setq gypsum-ui--preview-active-theme nil))
+  (when gypsum-ui--preview-original-theme
+    (enable-theme gypsum-ui--preview-original-theme)
+    (setq gypsum-ui--preview-original-theme nil))
+  (setq gypsum-ui--preview-current-args nil)
   (message "Preview dismissed"))
 
-;;;###autoload
-(defun gypsum-preview-save (name)
-  "Save the current preview as a theme file with NAME."
-  (interactive "sTheme name: ")
-  (unless gypsum-preview--active-theme
-    (error "No preview is currently active"))
-  (unless gypsum-preview--current-args
-    (error "No preview settings available to save"))
-  (let* ((output-dir (read-directory-name
-                      "Output directory: "
-                      gypsum-output-directory))
-         (output-path (expand-file-name
-                       (format "%s-theme.el" name)
-                       output-dir)))
-    (apply #'gypsum-generate name
-           :output output-path
-           gypsum-preview--current-args)
-    ;; Dismiss the preview and load the saved theme
-    (gypsum-preview-dismiss)
-    (load-theme (intern name) t)
-    (message "Theme '%s' saved and loaded!" name)))
+;;; --- Variant Selection ---
+
+(defvar gypsum-ui--variant-options
+  '(("dark" . (dark . normal))
+    ("dark-lc" . (dark . low))
+    ("light" . (light . normal))
+    ("light-lc" . (light . low)))
+  "Mapping of variant names to (variant . contrast) pairs.")
+
+(defun gypsum-ui--select-variants ()
+  "Prompt user to select which theme variants to generate.
+Returns a list of selected variant keys."
+  (let* ((options '("dark" "dark-lc" "light" "light-lc"))
+         (prompt "Select variants (comma-separated, or 'all'): ")
+         (input (completing-read prompt
+                                 (cons "all" options)
+                                 nil nil nil nil "all")))
+    (if (string= input "all")
+        options
+      (mapcar #'string-trim (split-string input ",")))))
 
 ;;; --- Interactive Theme Generator ---
 
-(defun gypsum--read-variant ()
-  "Read theme variant from user."
-  (intern (completing-read "Theme variant: " '("dark" "light") nil t)))
-
-(defun gypsum--read-contrast ()
-  "Read contrast level from user."
-  (intern (completing-read "Contrast level: " '("normal" "low") nil t "normal")))
-
-(defun gypsum--read-color (prompt &optional default)
+(defun gypsum-ui--read-color (prompt &optional default)
   "Read a color from user with PROMPT.
 DEFAULT is used if provided and user enters empty string."
   (let ((input (completing-read
                 (format "%s%s: "
                         prompt
                         (if default (format " [%s]" default) ""))
-                (mapcar #'car gypsum-curated-colors)
+                (mapcar #'car gypsum-ui--curated-colors)
                 nil nil nil nil default)))
     (if (string-empty-p input)
         default
       input)))
 
-(defun gypsum--ask-override-p ()
-  "Ask if user wants to override individual colors."
-  (yes-or-no-p "Do you want to customize individual colors? "))
-
 ;;;###autoload
-(defun gypsum-generate-theme ()
-  "Interactively generate an Alabaster-style theme.
-Guides you through selecting colors and options, with preview."
+(defun gypsum ()
+  "Interactively generate Alabaster-style Emacs themes.
+Guides you through selecting colors and which variants to generate."
   (interactive)
   (let* ((name (read-string "Theme name: "))
-         (variant (gypsum--read-variant))
-         (contrast (gypsum--read-contrast))
          (seed nil)
          (background nil)
          (string-override nil)
          (constant-override nil)
          (comment-override nil)
-         args)
+         (variants nil)
+         (output-dir nil)
+         (base-args nil)
+         (generated-files nil))
     ;; Validate name
     (when (string-empty-p name)
       (error "Theme name cannot be empty"))
     (when (string-suffix-p "-theme" name)
       (setq name (substring name 0 -6)))
     ;; Get seed color
-    (setq seed (gypsum-pick-color "Select seed color (this sets the theme's character):"))
+    (setq seed (gypsum-ui--pick-color "Select seed color (this sets the theme's character):"))
     (unless seed
       (error "Seed color is required"))
+    ;; Select variants to generate
+    (setq variants (gypsum-ui--select-variants))
+    (unless variants
+      (error "At least one variant must be selected"))
     ;; Optional: custom background
     (when (yes-or-no-p "Customize background color? (default is auto-generated) ")
-      (setq background (gypsum-pick-color "Select background color:")))
+      (setq background (gypsum-ui--pick-color "Select background color:")))
     ;; Optional: override individual semantic colors
-    (when (gypsum--ask-override-p)
+    (when (yes-or-no-p "Customize individual colors? ")
       (when (yes-or-no-p "Customize string color? ")
-        (setq string-override (gypsum-pick-color "Select string color:")))
+        (setq string-override (gypsum-ui--pick-color "Select string color:")))
       (when (yes-or-no-p "Customize constant color? ")
-        (setq constant-override (gypsum-pick-color "Select constant color:")))
+        (setq constant-override (gypsum-ui--pick-color "Select constant color:")))
       (when (yes-or-no-p "Customize comment color? ")
-        (setq comment-override (gypsum-pick-color "Select comment color:"))))
-    ;; Build args
-    (setq args (list :seed seed :variant variant :contrast contrast))
-    (when background (setq args (plist-put args :background background)))
-    (when string-override (setq args (plist-put args :string string-override)))
-    (when constant-override (setq args (plist-put args :constant constant-override)))
-    (when comment-override (setq args (plist-put args :comment comment-override)))
-    ;; Preview
+        (setq comment-override (gypsum-ui--pick-color "Select comment color:"))))
+    ;; Build base args (without variant/contrast)
+    (setq base-args (list :seed seed))
+    (when background (setq base-args (plist-put base-args :background background)))
+    (when string-override (setq base-args (plist-put base-args :string string-override)))
+    (when constant-override (setq base-args (plist-put base-args :constant constant-override)))
+    (when comment-override (setq base-args (plist-put base-args :comment comment-override)))
+    ;; Optional preview (for first variant)
     (when (yes-or-no-p "Preview the theme before saving? ")
-      (apply #'gypsum-preview args)
-      (unless (yes-or-no-p "Save this theme? ")
-        (gypsum-preview-dismiss)
-        (error "Theme generation cancelled")))
-    ;; Generate
-    (let ((output-dir (read-directory-name
-                       "Output directory: "
-                       gypsum-output-directory)))
-      (setq args (plist-put args :output
-                            (expand-file-name
-                             (format "%s-theme.el" name)
-                             output-dir)))
-      (apply #'gypsum-generate name args))
+      (let* ((first-variant (car variants))
+             (variant-spec (cdr (assoc first-variant gypsum-ui--variant-options)))
+             (preview-args (copy-sequence base-args)))
+        (setq preview-args (plist-put preview-args :variant (car variant-spec)))
+        (setq preview-args (plist-put preview-args :contrast (cdr variant-spec)))
+        (gypsum-ui--preview preview-args)
+        (unless (yes-or-no-p "Continue with theme generation? ")
+          (gypsum-preview-dismiss)
+          (error "Theme generation cancelled"))))
+    ;; Get output directory
+    (setq output-dir (read-directory-name
+                      "Output directory: "
+                      gypsum-output-directory))
+    ;; Generate each selected variant
+    (dolist (variant-key variants)
+      (let* ((variant-spec (cdr (assoc variant-key gypsum-ui--variant-options)))
+             (variant (car variant-spec))
+             (contrast (cdr variant-spec))
+             (theme-name (if (eq contrast 'low)
+                             (format "%s-%s-lc" name variant)
+                           (format "%s-%s" name variant)))
+             (output-path (expand-file-name
+                           (format "%s-theme.el" theme-name)
+                           output-dir))
+             (args (copy-sequence base-args)))
+        (setq args (plist-put args :variant variant))
+        (setq args (plist-put args :contrast contrast))
+        (setq args (plist-put args :output output-path))
+        (apply #'gypsum-generate theme-name args)
+        (push theme-name generated-files)))
     ;; Dismiss preview if still active
-    (when gypsum-preview--active-theme
+    (when gypsum-ui--preview-active-theme
       (gypsum-preview-dismiss))
-    ;; Offer to load the theme
-    (when (yes-or-no-p "Load the generated theme now? ")
-      (load-theme (intern name) t)
-      (message "Theme '%s' loaded!" name))))
+    ;; Report what was generated
+    (message "Generated %d theme(s): %s"
+             (length generated-files)
+             (mapconcat #'identity (nreverse generated-files) ", "))
+    ;; Offer to load a theme
+    (when (yes-or-no-p "Load one of the generated themes now? ")
+      (let ((to-load (completing-read "Load theme: "
+                                      (nreverse generated-files)
+                                      nil t)))
+        (load-theme (intern to-load) t)
+        (message "Theme '%s' loaded!" to-load)))))
 
 ;;; --- Palette Preview ---
 
@@ -390,8 +390,8 @@ Guides you through selecting colors and options, with preview."
 (defun gypsum-show-palette (seed variant)
   "Display the palette that would be generated from SEED for VARIANT."
   (interactive
-   (list (gypsum-pick-color "Select seed color:")
-         (gypsum--read-variant)))
+   (list (gypsum-ui--pick-color "Select seed color:")
+         (intern (completing-read "Variant: " '("dark" "light") nil t))))
   (let* ((palette (gypsum-palette-create :seed seed :variant variant))
          (buf (get-buffer-create "*Gypsum Palette*")))
     (with-current-buffer buf

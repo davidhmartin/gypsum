@@ -223,7 +223,6 @@ FACE-SPEC is (FACE-NAME ((CLASS ATTRS)))."
      "))"
      (gypsum-generate--footer name))))
 
-;;;###autoload
 (cl-defun gypsum-generate (name &rest args &key seed variant contrast
                                 background string constant comment
                                 definition output load)
@@ -245,10 +244,6 @@ Keyword arguments:
   :load BOOL        - Load and enable theme after generation (default t)
 
 Returns the path to the generated theme file."
-  (interactive
-   (list (read-string "Theme name: ")
-         :seed (gypsum-pick-color "Select seed color:")
-         :variant (intern (completing-read "Variant: " '("dark" "light") nil t))))
   ;; Validate name
   (when (string-suffix-p "-theme" name)
     (setq name (substring name 0 -6)))
@@ -283,7 +278,6 @@ Returns the path to the generated theme file."
       (message "Theme '%s' loaded and enabled" name))
     output-path))
 
-;;;###autoload
 (cl-defun gypsum-generate-all (base-name &rest args &key seed
                                          background string constant comment
                                          definition output-dir load)
@@ -309,9 +303,6 @@ Keyword arguments:
   :load BOOL        - Load themes after generation (default nil for batch)
 
 Returns list of generated theme file paths."
-  (interactive
-   (list (read-string "Base theme name: ")
-         :seed (gypsum-pick-color "Select seed color:")))
   ;; Validate name
   (when (string-empty-p base-name)
     (error "Theme name cannot be empty"))
