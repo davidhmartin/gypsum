@@ -13,6 +13,7 @@
 (require 'gypsum-palette)
 (require 'gypsum-faces)
 (require 'gypsum-generate)
+(require 'gypsum-ui)
 
 ;;; --- Color Conversion Tests ---
 
@@ -381,6 +382,21 @@
       (dolist (file (directory-files temp-dir t "\\.el$"))
         (delete-file file))
       (delete-directory temp-dir))))
+
+(ert-deftest gypsum-test-preview-create-temp-theme ()
+  "Test that preview creates a valid temporary theme."
+  (let* ((palette (gypsum-palette-create :seed "#3498DB" :variant 'dark))
+         (theme-name (gypsum-preview--create-temp-theme palette)))
+    (unwind-protect
+        (progn
+          ;; Theme should be a symbol
+          (should (symbolp theme-name))
+          ;; Theme should be declared
+          (should (custom-theme-p theme-name))
+          ;; Theme should have face settings
+          (should (get theme-name 'theme-settings)))
+      ;; Cleanup
+      (disable-theme theme-name))))
 
 (provide 'gypsum-test)
 

@@ -214,8 +214,9 @@ Otherwise, return the selected color synchronously."
     (put theme-name 'theme-settings nil)
     (apply #'custom-theme-set-faces theme-name
            (mapcar (lambda (spec)
+                     ;; spec structure: (FACE-NAME ((CLASS-DISPLAY ATTRS)))
                      (let ((face (car spec))
-                           (attrs (cadar (cdr spec))))
+                           (attrs (cadr (caadr spec))))
                        `(,face ((t ,attrs)))))
                    face-specs))
     theme-name))
