@@ -23,14 +23,14 @@ Everything else—keywords, operators, variable uses, function calls—uses the 
 
 ```elisp
 (straight-use-package
- '(gypsum :type git :host github :repo "yourusername/gypsum"))
+ '(gypsum :type git :host github :repo "davidhmartin/gypsum"))
 ```
 
 ### Using straight.el with use-package
 
 ```elisp
 (use-package gypsum
-  :straight (:type git :host github :repo "yourusername/gypsum"))
+  :straight (:type git :host github :repo "davidhmartin/gypsum"))
 ```
 
 ### Manual Installation
@@ -38,7 +38,7 @@ Everything else—keywords, operators, variable uses, function calls—uses the 
 Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/gypsum.git ~/.emacs.d/site-lisp/gypsum
+git clone https://github.com/davidhmartin/gypsum.git ~/.emacs.d/site-lisp/gypsum
 ```
 
 Add to your init.el:
@@ -244,13 +244,57 @@ Generate sample themes:
 
 ## Customization
 
-Default output directory:
+### Output Directory
+
+By default, Gypsum saves generated themes to `~/.emacs.d/themes/`. To change this:
 
 ```elisp
-(setq gypsum-output-directory "~/.emacs.d/themes/")
+(setq gypsum-output-directory "~/my-themes/")
 ```
 
-Author name in generated themes:
+You can also specify an output path per-theme:
+
+```elisp
+(gypsum-generate "my-theme" :seed "#5E81AC" :variant 'dark
+                 :output "~/my-themes/my-theme-theme.el")
+```
+
+### Loading Generated Themes
+
+For Emacs to find your generated themes, the output directory must be in `custom-theme-load-path`. Gypsum automatically adds it when generating a theme in the current session, but for future sessions you need to configure this.
+
+**Standalone configuration:**
+
+```elisp
+(add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
+```
+
+**With straight.el:**
+
+```elisp
+(straight-use-package
+ '(gypsum :type git :host github :repo "davidhmartin/gypsum"))
+(add-to-list 'custom-theme-load-path "~/.emacs.d/themes/")
+```
+
+**With use-package and straight.el:**
+
+```elisp
+(use-package gypsum
+  :straight (:type git :host github :repo "davidhmartin/gypsum")
+  :config
+  (add-to-list 'custom-theme-load-path "~/.emacs.d/themes/"))
+```
+
+After this configuration, you can load your generated themes with:
+
+```elisp
+(load-theme 'my-theme t)
+```
+
+### Author Name
+
+Set the author name included in generated theme headers:
 
 ```elisp
 (setq gypsum-author-name "Your Name")
