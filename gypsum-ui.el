@@ -382,7 +382,7 @@ Returns nil if only the base palette remains."
   "Interactively select a transformation to apply."
   (let ((choice (completing-read
                  "Transform: "
-                 '("none" "hue-shift" "definition-only" "blend"
+                 '("none" "hue-shift" "set-color" "blend"
                    "derive-dark" "derive-light" "change-background")
                  nil t nil nil "none")))
     (if (string= choice "none")
@@ -395,9 +395,13 @@ Returns nil if only the base palette remains."
     ('hue-shift
      (let ((degrees (read-number "Hue shift degrees (-180 to 180): " 0)))
        (gypsum-palette-tint palette :mode 'hue-shift :degrees degrees)))
-    ('definition-only
-     (let ((color (gypsum-ui--pick-color "Select definition color:")))
-       (gypsum-palette-tint palette :mode 'definition-only :definition color)))
+    ('set-color
+     (let* ((key-name (completing-read "Which color? "
+                                       '("string" "constant" "comment" "definition")
+                                       nil t))
+            (key (intern (concat ":" key-name)))
+            (color (gypsum-ui--pick-color (format "Select %s color:" key-name))))
+       (gypsum-palette-tint palette :mode 'set-color :key key :color color)))
     ('blend
      (let ((color (gypsum-ui--pick-color "Select color to blend toward:"))
            (amount (read-number "Blend amount (0-100): " 20)))
@@ -431,15 +435,15 @@ Supports undo via palette history stack."
     (while (not done)
       (let* ((can-undo (gypsum-ui--history-can-undo-p))
              (choices (if can-undo
-                          '("Apply transform"
+                          '("Add transform"
                             "Undo last transform"
                             "Done - proceed to generate")
-                        '("Apply transform"
+                        '("Add transform"
                           "Done - proceed to generate")))
              (choice (completing-read "Action: " choices nil t)))
         (cond
-         ;; Apply transform
-         ((string= choice "Apply transform")
+         ;; Add transform
+         ((string= choice "Add transform")
           (let ((transform (gypsum-ui--select-transform)))
             (when transform
               (condition-case err

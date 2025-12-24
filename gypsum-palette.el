@@ -25,20 +25,21 @@
 ;;
 ;; Three ways to tint a palette:
 ;; 1. hue-shift - rotate all semantic colors by N degrees
-;; 2. definition-only - replace definition color, keep others
+;; 2. set-color - replace a specific semantic color
 ;; 3. blend - blend all colors toward an accent color
 
 (defun gypsum-palette-tint (palette &rest args)
   "Tint PALETTE using the specified mode.
 
 ARGS is a plist with:
-  :mode MODE - Tinting mode: \\='hue-shift, \\='definition-only, or \\='blend
+  :mode MODE - Tinting mode: \\='hue-shift, \\='set-color, or \\='blend
 
 For hue-shift mode:
   :degrees N - Number of degrees to rotate (default 0)
 
-For definition-only mode:
-  :definition COLOR - The new definition color
+For set-color mode:
+  :key KEY - Which color to set (:string, :constant, :comment, or :definition)
+  :color COLOR - The new color value
 
 For blend mode:
   :color COLOR - Color to blend toward
@@ -49,8 +50,10 @@ Returns a new palette with tinted colors."
     (pcase mode
       ('hue-shift
        (gypsum-palette--tint-hue-shift palette (or (plist-get args :degrees) 0)))
-      ('definition-only
-       (gypsum-palette--tint-definition-only palette (plist-get args :definition)))
+      ('set-color
+       (gypsum-palette--tint-set-color palette
+                                        (plist-get args :key)
+                                        (plist-get args :color)))
       ('blend
        (gypsum-palette--tint-blend palette
                                     (plist-get args :color)
@@ -77,12 +80,16 @@ Returns a new palette with tinted colors."
           (setq result (plist-put result key (gypsum-color-rotate color degrees))))))
     result))
 
-(defun gypsum-palette--tint-definition-only (palette definition)
-  "Replace only the definition color in PALETTE with DEFINITION."
-  (unless definition
-    (error "Must provide :definition color"))
+(defun gypsum-palette--tint-set-color (palette key color)
+  "Replace a semantic color in PALETTE.
+KEY is one of :string, :constant, :comment, or :definition.
+COLOR is the new hex color value."
+  (unless (memq key '(:string :constant :comment :definition))
+    (error "Key must be :string, :constant, :comment, or :definition"))
+  (unless color
+    (error "Must provide :color value"))
   (let ((result (copy-sequence palette)))
-    (plist-put result :definition definition)))
+    (plist-put result key color)))
 
 (defun gypsum-palette--tint-blend (palette color amount)
   "Blend all colors in PALETTE toward COLOR by AMOUNT percent."

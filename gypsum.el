@@ -120,7 +120,7 @@
 ;;   `gypsum-preset-list'        - List available preset names
 ;;
 ;; Palette Operations:
-;;   `gypsum-palette-tint'       - Tint a palette (hue-shift, blend, definition-only)
+;;   `gypsum-palette-tint'       - Tint a palette (hue-shift, set-color, blend)
 ;;   `gypsum-palette-derive-dark'- Derive dark variant from light palette
 ;;   `gypsum-palette-derive-light' - Derive light variant from dark palette
 ;;   `gypsum-palette-generate'   - Generate palette from seed color

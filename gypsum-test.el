@@ -196,22 +196,23 @@
     (should-not (equal (plist-get base :comment)
                        (plist-get tinted :comment)))))
 
-(ert-deftest gypsum-test-palette-tint-definition-only ()
-  "Test definition-only tinting."
+(ert-deftest gypsum-test-palette-tint-set-color ()
+  "Test set-color tinting for all semantic colors."
   (let* ((base (gypsum-preset-get 'alabaster-light))
-         (new-def "#FF0000")
-         (tinted (gypsum-palette-tint base
-                                       :mode 'definition-only
-                                       :definition new-def)))
-    ;; Definition should be changed
-    (should (equal (plist-get tinted :definition) new-def))
-    ;; Other semantic colors should be unchanged
-    (should (equal (plist-get base :string)
-                   (plist-get tinted :string)))
-    (should (equal (plist-get base :constant)
-                   (plist-get tinted :constant)))
-    (should (equal (plist-get base :comment)
-                   (plist-get tinted :comment)))))
+         (new-color "#FF0000"))
+    ;; Test setting each semantic color
+    (dolist (key '(:string :constant :comment :definition))
+      (let ((tinted (gypsum-palette-tint base
+                                          :mode 'set-color
+                                          :key key
+                                          :color new-color)))
+        ;; Target color should be changed
+        (should (equal (plist-get tinted key) new-color))
+        ;; Other semantic colors should be unchanged
+        (dolist (other-key '(:string :constant :comment :definition))
+          (unless (eq key other-key)
+            (should (equal (plist-get base other-key)
+                           (plist-get tinted other-key)))))))))
 
 (ert-deftest gypsum-test-palette-tint-blend ()
   "Test blend tinting."
