@@ -52,6 +52,27 @@
   (setq cursor-type 'box)
   (setq buffer-read-only t))
 
+(defvar gypsum-ui--background-colors
+  '(;; Light backgrounds
+    ("#FFFFFF" "Pure White")
+    ("#FAFAFA" "Snow")
+    ("#F7F7F7" "Alabaster Light")
+    ("#F5F5F5" "White Smoke")
+    ("#F0EDE6" "Warm White")
+    ("#FFFBEB" "Cream")
+    ("#F0FDF4" "Mint White")
+    ("#EFF6FF" "Ice Blue")
+    ;; Dark backgrounds
+    ("#0E1415" "Alabaster Dark")
+    ("#1A1A1A" "Near Black")
+    ("#1E1E1E" "VS Code Dark")
+    ("#2D2D2D" "Charcoal")
+    ("#282C34" "One Dark")
+    ("#1E3A5F" "Deep Navy")
+    ("#1A1B26" "Tokyo Night")
+    ("#2E3440" "Nord Dark"))
+  "Background colors organized by light and dark variants.")
+
 (defvar gypsum-ui--curated-colors
   '(;; Blues
     ("#1E3A5F" "Deep Navy")
@@ -97,6 +118,9 @@
     ("#99F6E4" "Pale Teal"))
   "Curated color palette with names for easy selection.")
 
+(defvar gypsum-ui--color-picker-include-backgrounds nil
+  "When non-nil, show background colors group first in picker.")
+
 (defun gypsum-ui--color-picker-format-line (color name)
   "Format a line for COLOR with NAME in the picker buffer."
   (let* ((swatch (propertize "    " 'face `(:background ,color)))
@@ -111,6 +135,15 @@
     (insert (propertize "Gypsum Color Picker\n" 'face 'bold))
     (insert "-------------------------------------------\n\n")
     (insert "RET: select, s: search by name, h: enter hex, q: quit\n\n")
+    ;; Show background colors first if requested
+    (when gypsum-ui--color-picker-include-backgrounds
+      (insert (propertize "Light Backgrounds\n" 'face 'bold))
+      (dolist (c (seq-take gypsum-ui--background-colors 8))
+        (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
+      (insert "\n" (propertize "Dark Backgrounds\n" 'face 'bold))
+      (dolist (c (seq-subseq gypsum-ui--background-colors 8))
+        (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
+      (insert "\n"))
     (insert (propertize "Blues\n" 'face 'bold))
     (dolist (c (seq-take gypsum-ui--curated-colors 6))
       (insert (gypsum-ui--color-picker-format-line (car c) (cadr c))))
@@ -179,14 +212,19 @@
           (funcall gypsum-ui--color-picker-callback (car color-entry))
         (exit-recursive-edit)))))
 
-(defun gypsum-ui--pick-color (prompt &optional callback)
+(defun gypsum-ui--pick-color (prompt &optional callback include-backgrounds)
   "Display color picker with PROMPT.
 If CALLBACK is provided, call it with the selected color.
-Otherwise, return the selected color synchronously."
+Otherwise, return the selected color synchronously.
+If INCLUDE-BACKGROUNDS is non-nil, show background colors group first."
   (let ((buf (get-buffer-create "*Gypsum Colors*")))
     (setq gypsum-ui--color-picker-callback callback)
     (setq gypsum-ui--color-picker-current nil)
-    (setq gypsum-ui--color-picker-colors gypsum-ui--curated-colors)
+    (setq gypsum-ui--color-picker-include-backgrounds include-backgrounds)
+    (setq gypsum-ui--color-picker-colors
+          (if include-backgrounds
+              (append gypsum-ui--background-colors gypsum-ui--curated-colors)
+            gypsum-ui--curated-colors))
     (with-current-buffer buf
       (gypsum-ui--color-picker-mode)
       (gypsum-ui--color-picker-insert-colors))
@@ -298,7 +336,8 @@ Use `gypsum-preview-dismiss' to remove the preview."
   "Interactively select a transformation to apply."
   (let ((choice (completing-read
                  "Transform: "
-                 '("none" "hue-shift" "definition-only" "blend" "derive-dark" "derive-light")
+                 '("none" "hue-shift" "definition-only" "blend"
+                   "derive-dark" "derive-light" "change-background")
                  nil t nil nil "none")))
     (if (string= choice "none")
         nil
@@ -325,6 +364,11 @@ Use `gypsum-preview-dismiss' to remove the preview."
      (if (eq (plist-get palette :variant) 'dark)
          (gypsum-palette-derive-light palette)
        (error "Can only derive light from a dark palette")))
+    ('change-background
+     (let ((new-bg (gypsum-ui--pick-color "Select new background color:" nil t)))
+       (unless new-bg
+         (user-error "No color selected"))
+       (gypsum-palette-change-background palette new-bg)))
     (_ palette)))
 
 ;;; --- Interactive Theme Generator ---

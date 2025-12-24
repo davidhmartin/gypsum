@@ -273,6 +273,86 @@
     ;; Variant should match
     (should (eq (plist-get palette :variant) 'light))))
 
+;;; --- Change Background Tests ---
+
+(ert-deftest gypsum-test-change-background-light-to-dark ()
+  "Test changing background from light to dark."
+  (let* ((light (gypsum-preset-get 'alabaster-light))
+         (new-bg "#1E1E1E")
+         (result (gypsum-palette-change-background light new-bg)))
+    ;; Variant should switch to dark
+    (should (eq (plist-get result :variant) 'dark))
+    ;; Background should be the new color
+    (should (equal (plist-get result :background) new-bg))
+    ;; bg-alt should be lighter than background (for dark variant)
+    (should (> (gypsum-color-luminance (plist-get result :bg-alt))
+               (gypsum-color-luminance new-bg)))
+    ;; Foreground should be light
+    (should (gypsum-color-light-p (plist-get result :foreground)))
+    ;; Foreground should have good contrast
+    (should (>= (gypsum-color-contrast (plist-get result :foreground) new-bg) 7.0))))
+
+(ert-deftest gypsum-test-change-background-dark-to-light ()
+  "Test changing background from dark to light."
+  (let* ((dark (gypsum-preset-get 'alabaster-dark))
+         (new-bg "#F5F5F5")
+         (result (gypsum-palette-change-background dark new-bg)))
+    ;; Variant should switch to light
+    (should (eq (plist-get result :variant) 'light))
+    ;; Background should be the new color
+    (should (equal (plist-get result :background) new-bg))
+    ;; bg-alt should be darker than background (for light variant)
+    (should (< (gypsum-color-luminance (plist-get result :bg-alt))
+               (gypsum-color-luminance new-bg)))
+    ;; Foreground should be dark
+    (should (gypsum-color-dark-p (plist-get result :foreground)))
+    ;; Foreground should have good contrast
+    (should (>= (gypsum-color-contrast (plist-get result :foreground) new-bg) 7.0))))
+
+(ert-deftest gypsum-test-change-background-semantic-contrast ()
+  "Test that semantic colors maintain contrast with new background."
+  (let* ((palette (gypsum-preset-get 'alabaster-dark))
+         (new-bg "#2D2D2D")
+         (result (gypsum-palette-change-background palette new-bg)))
+    ;; All semantic colors should have >= 4.5 contrast
+    (dolist (key '(:string :constant :comment :definition))
+      (let ((color (plist-get result key)))
+        (should (>= (gypsum-color-contrast color new-bg) 4.5))))))
+
+(ert-deftest gypsum-test-change-background-diff-colors ()
+  "Test that diff colors are properly derived."
+  (let* ((palette (gypsum-preset-get 'alabaster-light))
+         (new-bg "#1A1A1A")  ; Dark background
+         (result (gypsum-palette-change-background palette new-bg)))
+    ;; Diff backgrounds should be dark (for dark variant)
+    (should (gypsum-color-dark-p (plist-get result :diff-add-bg)))
+    (should (gypsum-color-dark-p (plist-get result :diff-del-bg)))
+    (should (gypsum-color-dark-p (plist-get result :diff-chg-bg)))
+    ;; diff-add-bg should be greenish (hue near 120)
+    (let ((hsl (gypsum-color-hex-to-hsl (plist-get result :diff-add-bg))))
+      (should (< (abs (- (nth 0 hsl) 120)) 30)))
+    ;; diff-del-bg should be reddish (hue near 0 or 360)
+    (let ((hsl (gypsum-color-hex-to-hsl (plist-get result :diff-del-bg))))
+      (should (or (< (nth 0 hsl) 30) (> (nth 0 hsl) 330))))))
+
+(ert-deftest gypsum-test-change-background-same-variant ()
+  "Test changing background within same variant."
+  (let* ((light (gypsum-preset-get 'alabaster-light))
+         (new-bg "#FAFAFA")  ; Still light
+         (result (gypsum-palette-change-background light new-bg)))
+    ;; Should remain light variant
+    (should (eq (plist-get result :variant) 'light))
+    ;; Foreground should still be dark
+    (should (gypsum-color-dark-p (plist-get result :foreground)))))
+
+(ert-deftest gypsum-test-change-background-validates-result ()
+  "Test that result is a valid palette."
+  (let* ((palette (gypsum-preset-get 'alabaster-light))
+         (new-bg "#2A2A2A")
+         (result (gypsum-palette-change-background palette new-bg)))
+    ;; Should pass validation
+    (should (gypsum-palette-validate result))))
+
 ;;; --- Face Generation Tests ---
 
 (ert-deftest gypsum-test-faces-generate ()

@@ -175,6 +175,28 @@ Adjusts lightness and saturation of colors for dark background display."
   (let ((hsl (gypsum-color-hex-to-hsl light-diff-bg)))
     (gypsum-color-hsl-to-hex (nth 0 hsl) 35.0 18.0)))
 
+;;; Helper functions for background changes
+
+(defun gypsum-palette--derive-foreground (background variant)
+  "Derive foreground color for BACKGROUND and VARIANT with high contrast."
+  (let ((base-fg (if (eq variant 'dark) "#D4D4D4" "#000000")))
+    (gypsum-color-ensure-contrast base-fg background 7.0)))
+
+(defun gypsum-palette--derive-fg-dim (background variant)
+  "Derive dimmed foreground color for BACKGROUND and VARIANT."
+  (let ((base-dim (if (eq variant 'dark) "#808080" "#777777")))
+    (gypsum-color-ensure-contrast base-dim background 4.5)))
+
+(defun gypsum-palette--derive-diff-bg (type variant)
+  "Derive diff background for TYPE (add/del/chg) and VARIANT."
+  (let* ((hue (pcase type
+                ('add 120.0)   ; Green
+                ('del 0.0)     ; Red
+                ('chg 45.0)))  ; Yellow
+         (sat (if (eq variant 'dark) 35.0 50.0))
+         (light (if (eq variant 'dark) 18.0 90.0)))
+    (gypsum-color-hsl-to-hex hue sat light)))
+
 ;;; Deriving light from dark
 
 (defun gypsum-palette-derive-light (dark-palette)
@@ -247,6 +269,63 @@ Adjusts lightness and saturation of colors for light background display."
   "Generate light diff background from DARK-DIFF-BG."
   (let ((hsl (gypsum-color-hex-to-hsl dark-diff-bg)))
     (gypsum-color-hsl-to-hex (nth 0 hsl) 50.0 90.0)))
+
+;;; Changing background color
+
+(defun gypsum-palette-change-background (palette new-background)
+  "Create a new palette from PALETTE with NEW-BACKGROUND.
+
+Automatically adjusts:
+- :variant (based on background luminance)
+- :bg-alt (derived from new background)
+- :foreground and :fg-dim (ensuring contrast)
+- :selection, :highlight, :find-hl (UI colors)
+- :diff-add-bg, :diff-del-bg, :diff-chg-bg
+- Semantic and status colors (if contrast insufficient)
+
+Returns a new palette plist."
+  (let* ((result (copy-sequence palette))
+         (is-dark (gypsum-color-dark-p new-background))
+         (new-variant (if is-dark 'dark 'light)))
+    ;; 1. Set background and variant
+    (setq result (plist-put result :background new-background))
+    (setq result (plist-put result :variant new-variant))
+    ;; 2. Calculate bg-alt
+    (setq result (plist-put result :bg-alt
+                            (if is-dark
+                                (gypsum-color-lighten new-background 5)
+                              (gypsum-color-darken new-background 5))))
+    ;; 3. Set foreground colors with contrast
+    (setq result (plist-put result :foreground
+                            (gypsum-palette--derive-foreground new-background new-variant)))
+    (setq result (plist-put result :fg-dim
+                            (gypsum-palette--derive-fg-dim new-background new-variant)))
+    ;; 4. Calculate UI colors
+    (let ((definition (plist-get result :definition)))
+      (setq result (plist-put result :selection
+                              (if is-dark
+                                  (gypsum-palette--dark-selection definition)
+                                (gypsum-palette--light-selection definition))))
+      (setq result (plist-put result :find-hl
+                              (if is-dark "#623315" "#FFBC5D"))))
+    ;; 5. Calculate diff colors
+    (setq result (plist-put result :diff-add-bg
+                            (gypsum-palette--derive-diff-bg 'add new-variant)))
+    (setq result (plist-put result :diff-del-bg
+                            (gypsum-palette--derive-diff-bg 'del new-variant)))
+    (setq result (plist-put result :diff-chg-bg
+                            (gypsum-palette--derive-diff-bg 'chg new-variant)))
+    ;; 6. Ensure semantic colors have sufficient contrast
+    (dolist (key '(:string :constant :comment :definition))
+      (let ((color (plist-get result key)))
+        (setq result (plist-put result key
+                                (gypsum-color-ensure-contrast color new-background 4.5)))))
+    ;; 7. Ensure status colors have sufficient contrast
+    (dolist (key '(:error :warning :success))
+      (let ((color (plist-get result key)))
+        (setq result (plist-put result key
+                                (gypsum-color-ensure-contrast color new-background 4.5)))))
+    result))
 
 ;;; Seed-based generation (stub)
 
