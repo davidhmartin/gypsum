@@ -2,9 +2,9 @@
 
 ;; Copyright (C) 2025
 
-;; Author: Gypsum Contributors
+;; Author: David
 ;; URL: https://github.com/davidhmartin/gypsum
-;; Version: 0.1.0
+;; Version: 2.0.0
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: faces, themes, tools
 
@@ -39,33 +39,38 @@
 ;; Everything else (keywords, operators, variable uses, function calls)
 ;; uses the default foreground color.  This is intentional.
 ;;
-;; Usage:
+;; Three Workflows:
 ;;
-;;   ;; Interactive - guided theme creation
-;;   M-x gypsum-generate-theme
+;; 1. Use a curated preset directly:
 ;;
-;;   ;; Programmatic - minimal (seed only)
-;;   (gypsum-generate "my-theme" :seed "#3498db" :variant 'dark)
+;;   (gypsum-generate-from-palette
+;;     "my-alabaster"
+;;     (gypsum-preset-get 'alabaster-light))
 ;;
-;;   ;; Programmatic - with overrides
-;;   (gypsum-generate "my-theme"
-;;     :seed "#3498db"
-;;     :variant 'dark
-;;     :comment "#FFCC00")
+;; 2. Transform a preset (tint or derive variant):
 ;;
-;;   ;; Programmatic - fully explicit
-;;   (gypsum-generate "my-theme"
-;;     :background "#0E1415"
-;;     :string "#99C592"
-;;     :constant "#9999FF"
-;;     :comment "#DFDF8E"
-;;     :definition "#71ADE7")
+;;   (gypsum-generate-from-palette
+;;     "tinted"
+;;     (gypsum-palette-tint
+;;       (gypsum-preset-get 'alabaster-light)
+;;       :mode 'hue-shift :degrees 30))
 ;;
-;;   ;; Preview without saving
-;;   (gypsum-preview :seed "#3498db" :variant 'dark)
+;;   (gypsum-generate-from-palette
+;;     "my-dark"
+;;     (gypsum-palette-derive-dark
+;;       (gypsum-preset-get 'alabaster-light)))
 ;;
-;;   ;; Show palette preview
-;;   M-x gypsum-show-palette
+;; 3. Generate from a seed color:
+;;
+;;   (gypsum-generate-from-palette
+;;     "seeded"
+;;     (gypsum-palette-generate "#3498DB" 'dark))
+;;
+;; Interactive:
+;;
+;;   M-x gypsum          - Guided theme creation (all 3 workflows)
+;;   M-x gypsum-from-preset - Quick preset-based generation
+;;   M-x gypsum-show-palette - Preview palette colors
 ;;
 ;; For more information on the philosophy behind this approach, see:
 ;; https://tonsky.me/blog/syntax-highlighting/
@@ -73,6 +78,7 @@
 ;;; Code:
 
 (require 'gypsum-color)
+(require 'gypsum-presets)
 (require 'gypsum-palette)
 (require 'gypsum-faces)
 (require 'gypsum-generate)
@@ -88,17 +94,25 @@
 
 ;;; --- Public API Summary ---
 
-;; Theme Generation:
+;; Interactive Commands:
 ;;   `gypsum'                    - Main interactive command (guided)
-;;   `gypsum-generate'           - Generate a theme file (programmatic)
-;;   `gypsum-generate-all'       - Generate all 4 variants (programmatic)
-;;
-;; Preview:
+;;   `gypsum-from-preset'        - Generate from a curated preset
+;;   `gypsum-show-palette'       - Show palette colors
 ;;   `gypsum-preview-dismiss'    - Dismiss current preview
-;;   `gypsum-show-palette'       - Show palette colors for a seed
 ;;
-;; Palette Creation:
-;;   `gypsum-palette-create'     - Create a palette programmatically
+;; Presets:
+;;   `gypsum-preset-get'         - Get a curated preset palette by name
+;;   `gypsum-preset-list'        - List available preset names
+;;
+;; Palette Operations:
+;;   `gypsum-palette-tint'       - Tint a palette (hue-shift, blend, definition-only)
+;;   `gypsum-palette-derive-dark'- Derive dark variant from light palette
+;;   `gypsum-palette-derive-light' - Derive light variant from dark palette
+;;   `gypsum-palette-generate'   - Generate palette from seed color
+;;   `gypsum-palette-validate'   - Validate a palette has all keys
+;;
+;; Theme Generation:
+;;   `gypsum-generate-from-palette' - Generate theme file from palette
 ;;
 ;; Color Manipulation:
 ;;   `gypsum-color-rotate'       - Rotate hue

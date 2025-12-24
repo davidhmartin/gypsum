@@ -10,6 +10,7 @@
 
 (require 'ert)
 (require 'gypsum-color)
+(require 'gypsum-presets)
 (require 'gypsum-palette)
 (require 'gypsum-faces)
 (require 'gypsum-generate)
@@ -44,8 +45,7 @@
     (dolist (color colors)
       (let* ((rgb (gypsum-color-hex-to-rgb color))
              (hsl (apply #'gypsum-color-rgb-to-hsl rgb))
-             (rgb2 (apply #'gypsum-color-hsl-to-rgb hsl))
-             (hex2 (apply #'gypsum-color-rgb-to-hex rgb2)))
+             (rgb2 (apply #'gypsum-color-hsl-to-rgb hsl)))
         ;; Allow small rounding differences
         (should (< (abs (- (nth 0 rgb) (nth 0 rgb2))) 2))
         (should (< (abs (- (nth 1 rgb) (nth 1 rgb2))) 2))
@@ -142,11 +142,125 @@
   ;; 100% blend should be second color
   (should (equal (gypsum-color-blend "#FF0000" "#00FF00" 1.0) "#00FF00")))
 
-;;; --- Palette Tests ---
+;;; --- Preset Tests ---
 
-(ert-deftest gypsum-test-palette-create-dark ()
-  "Test dark palette creation."
-  (let ((palette (gypsum-palette-create :seed "#3498DB" :variant 'dark)))
+(ert-deftest gypsum-test-preset-get ()
+  "Test retrieving presets."
+  ;; Should get alabaster light
+  (let ((palette (gypsum-preset-get 'alabaster-light)))
+    (should palette)
+    (should (eq (plist-get palette :variant) 'light))
+    ;; Should have the exact alabaster colors
+    (should (equal (plist-get palette :string) "#448C27"))
+    (should (equal (plist-get palette :constant) "#7A3E9D"))
+    (should (equal (plist-get palette :comment) "#AA3731"))
+    (should (equal (plist-get palette :definition) "#325CC0")))
+  ;; Should get alabaster dark
+  (let ((palette (gypsum-preset-get 'alabaster-dark)))
+    (should palette)
+    (should (eq (plist-get palette :variant) 'dark)))
+  ;; Non-existent preset should return nil
+  (should-not (gypsum-preset-get 'nonexistent)))
+
+(ert-deftest gypsum-test-preset-list ()
+  "Test listing available presets."
+  (let ((presets (gypsum-preset-list)))
+    (should (listp presets))
+    (should (memq 'alabaster-light presets))
+    (should (memq 'alabaster-dark presets))))
+
+(ert-deftest gypsum-test-palette-validate ()
+  "Test palette validation."
+  ;; Valid palette should pass
+  (let ((palette (gypsum-preset-get 'alabaster-light)))
+    (should (gypsum-palette-validate palette)))
+  ;; Invalid palette should error
+  (should-error (gypsum-palette-validate '(:name test :variant light))))
+
+;;; --- Palette Tinting Tests ---
+
+(ert-deftest gypsum-test-palette-tint-hue-shift ()
+  "Test hue-shift tinting."
+  (let* ((base (gypsum-preset-get 'alabaster-light))
+         (tinted (gypsum-palette-tint base :mode 'hue-shift :degrees 30)))
+    ;; Definition should be rotated
+    (should-not (equal (plist-get base :definition)
+                       (plist-get tinted :definition)))
+    ;; All 4 semantic colors should be rotated
+    (should-not (equal (plist-get base :string)
+                       (plist-get tinted :string)))
+    (should-not (equal (plist-get base :constant)
+                       (plist-get tinted :constant)))
+    (should-not (equal (plist-get base :comment)
+                       (plist-get tinted :comment)))))
+
+(ert-deftest gypsum-test-palette-tint-definition-only ()
+  "Test definition-only tinting."
+  (let* ((base (gypsum-preset-get 'alabaster-light))
+         (new-def "#FF0000")
+         (tinted (gypsum-palette-tint base
+                                       :mode 'definition-only
+                                       :definition new-def)))
+    ;; Definition should be changed
+    (should (equal (plist-get tinted :definition) new-def))
+    ;; Other semantic colors should be unchanged
+    (should (equal (plist-get base :string)
+                   (plist-get tinted :string)))
+    (should (equal (plist-get base :constant)
+                   (plist-get tinted :constant)))
+    (should (equal (plist-get base :comment)
+                   (plist-get tinted :comment)))))
+
+(ert-deftest gypsum-test-palette-tint-blend ()
+  "Test blend tinting."
+  (let* ((base (gypsum-preset-get 'alabaster-light))
+         (tinted (gypsum-palette-tint base
+                                       :mode 'blend
+                                       :color "#FF0000"
+                                       :amount 50)))
+    ;; Colors should be shifted toward red
+    (should-not (equal (plist-get base :definition)
+                       (plist-get tinted :definition)))
+    (should-not (equal (plist-get base :string)
+                       (plist-get tinted :string)))))
+
+;;; --- Palette Derivation Tests ---
+
+(ert-deftest gypsum-test-palette-derive-dark ()
+  "Test deriving dark palette from light."
+  (let* ((light (gypsum-preset-get 'alabaster-light))
+         (dark (gypsum-palette-derive-dark light)))
+    ;; Should be dark variant
+    (should (eq (plist-get dark :variant) 'dark))
+    ;; Background should be dark
+    (should (gypsum-color-dark-p (plist-get dark :background)))
+    ;; Foreground should be light
+    (should (gypsum-color-light-p (plist-get dark :foreground)))
+    ;; Semantic colors should be adjusted (different from light)
+    (should-not (equal (plist-get light :definition)
+                       (plist-get dark :definition)))
+    ;; Should error if given a dark palette
+    (should-error (gypsum-palette-derive-dark dark))))
+
+(ert-deftest gypsum-test-palette-derive-light ()
+  "Test deriving light palette from dark."
+  (let* ((dark (gypsum-preset-get 'alabaster-dark))
+         (light (gypsum-palette-derive-light dark)))
+    ;; Should be light variant
+    (should (eq (plist-get light :variant) 'light))
+    ;; Background should be light
+    (should (gypsum-color-light-p (plist-get light :background)))
+    ;; Foreground should be dark
+    (should (gypsum-color-dark-p (plist-get light :foreground)))
+    ;; Semantic colors should be adjusted (different from dark)
+    (should-not (equal (plist-get dark :definition)
+                       (plist-get light :definition)))
+    ;; Should error if given a light palette
+    (should-error (gypsum-palette-derive-light light))))
+
+(ert-deftest gypsum-test-palette-generate ()
+  "Test seed-based palette generation."
+  (let ((palette (gypsum-palette-generate "#3498DB" 'light)))
     ;; Should have all required keys
     (should (plist-get palette :background))
     (should (plist-get palette :foreground))
@@ -154,70 +268,14 @@
     (should (plist-get palette :constant))
     (should (plist-get palette :comment))
     (should (plist-get palette :definition))
-    ;; Background should be dark
-    (should (gypsum-color-dark-p (plist-get palette :background)))
-    ;; Foreground should be light
-    (should (gypsum-color-light-p (plist-get palette :foreground)))
-    ;; Variant should be stored
-    (should (eq (plist-get palette :variant) 'dark))))
-
-(ert-deftest gypsum-test-palette-create-light ()
-  "Test light palette creation."
-  (let ((palette (gypsum-palette-create :seed "#3498DB" :variant 'light)))
-    ;; Background should be light
-    (should (gypsum-color-light-p (plist-get palette :background)))
-    ;; Foreground should be dark
-    (should (gypsum-color-dark-p (plist-get palette :foreground)))
-    ;; Variant should be stored
+    ;; Variant should match
     (should (eq (plist-get palette :variant) 'light))))
-
-(ert-deftest gypsum-test-palette-override ()
-  "Test palette with color overrides."
-  (let ((custom-comment "#FF00FF")
-        (palette (gypsum-palette-create
-                  :seed "#3498DB"
-                  :variant 'dark
-                  :comment "#FF00FF")))
-    ;; Comment should be our override
-    (should (equal (upcase (plist-get palette :comment))
-                   (upcase custom-comment)))))
-
-(ert-deftest gypsum-test-palette-infer-variant ()
-  "Test variant inference from background."
-  (let ((dark-palette (gypsum-palette-create
-                       :background "#0E1415"
-                       :definition "#71ADE7"))
-        (light-palette (gypsum-palette-create
-                        :background "#F7F7F7"
-                        :definition "#3498DB")))
-    (should (eq (plist-get dark-palette :variant) 'dark))
-    (should (eq (plist-get light-palette :variant) 'light))))
-
-(ert-deftest gypsum-test-palette-low-contrast-differs ()
-  "Test that low contrast palette differs from normal contrast."
-  (let* ((normal (gypsum-palette-create :seed "#3498DB" :variant 'dark :contrast 'normal))
-         (low (gypsum-palette-create :seed "#3498DB" :variant 'dark :contrast 'low)))
-    ;; Foreground should be darker in low contrast dark theme
-    (should-not (equal (plist-get normal :foreground)
-                       (plist-get low :foreground)))
-    ;; Semantic colors should be less saturated
-    (should-not (equal (plist-get normal :string)
-                       (plist-get low :string)))
-    (should-not (equal (plist-get normal :constant)
-                       (plist-get low :constant)))
-    (should-not (equal (plist-get normal :comment)
-                       (plist-get low :comment)))
-    (should-not (equal (plist-get normal :definition)
-                       (plist-get low :definition)))
-    ;; Contrast should be stored correctly
-    (should (eq (plist-get normal :contrast) 'normal))
-    (should (eq (plist-get low :contrast) 'low))))
 
 ;;; --- Face Generation Tests ---
 
 (ert-deftest gypsum-test-faces-generate ()
   "Test face spec generation."
-  (let* ((palette (gypsum-palette-create :seed "#3498DB" :variant 'dark))
+  (let* ((palette (gypsum-preset-get 'alabaster-dark))
          (faces (gypsum-faces-generate palette)))
     ;; Should return a list
     (should (listp faces))
@@ -232,17 +290,22 @@
 
 (ert-deftest gypsum-test-faces-resolve-colors ()
   "Test that face colors are properly resolved."
-  (let* ((palette '(:foreground "#FFFFFF" :background "#000000" :string "#00FF00"))
+  (let* ((palette '(:foreground "#FFFFFF" :background "#000000" :string "#00FF00"
+                    :constant "#FF00FF" :comment "#FFFF00" :definition "#0000FF"
+                    :fg-dim "#808080" :bg-alt "#1A1A1A" :selection "#333333"
+                    :highlight "#444444" :find-hl "#555555"
+                    :error "#FF0000" :warning "#FFA500" :success "#00FF00"
+                    :diff-add-bg "#002200" :diff-del-bg "#220000" :diff-chg-bg "#222200"
+                    :name test :variant dark))
          (face-spec '(font-lock-string-face :fg string)))
     ;; Build face spec
     (let ((result (gypsum-faces--build-face-spec face-spec palette)))
       ;; Should have the face name
       (should (eq (car result) 'font-lock-string-face))
       ;; Result structure: (FACE-NAME ((CLASS ATTRS)))
-      ;; Get the attrs from the nested structure
-      (let* ((display-spec (cadr result))        ; ((CLASS ATTRS))
-             (class-attrs (car display-spec))    ; (CLASS ATTRS)
-             (attrs (cadr class-attrs)))         ; ATTRS = (:foreground "#00FF00")
+      (let* ((display-spec (cadr result))
+             (class-attrs (car display-spec))
+             (attrs (cadr class-attrs)))
         (should (member :foreground attrs))
         (should (member "#00FF00" attrs))))))
 
@@ -250,7 +313,7 @@
 
 (ert-deftest gypsum-test-generate-file-content ()
   "Test that generated theme content is valid."
-  (let* ((palette (gypsum-palette-create :seed "#3498DB" :variant 'dark))
+  (let* ((palette (gypsum-preset-get 'alabaster-dark))
          (content (gypsum-generate--build-file-content "test-theme" palette)))
     ;; Should be a string
     (should (stringp content))
@@ -263,21 +326,19 @@
     ;; Should contain key face definitions
     (should (string-match-p "font-lock-string-face" content))
     (should (string-match-p "font-lock-comment-face" content))
-    (should (string-match-p ":foreground ,definition" content))
-    ;; The workflow tests verify actual loadability
-    ))
+    ;; Should contain section comments
+    (should (string-match-p "=== Font-lock faces" content))
+    ;; Should contain Alabaster philosophy
+    (should (string-match-p "FOUR categories" content))))
 
-(ert-deftest gypsum-test-generate-creates-file ()
-  "Test that gypsum-generate creates a file."
+(ert-deftest gypsum-test-generate-from-palette ()
+  "Test that gypsum-generate-from-palette creates a file."
   (let* ((temp-dir (make-temp-file "gypsum-test" t))
-         (output-path (expand-file-name "test-theme.el" temp-dir)))
+         (output-path (expand-file-name "test-theme.el" temp-dir))
+         (palette (gypsum-preset-get 'alabaster-dark)))
     (unwind-protect
         (progn
-          (gypsum-generate "test"
-                           :seed "#3498DB"
-                           :variant 'dark
-                           :output output-path
-                           :load nil)
+          (gypsum-generate-from-palette "test" palette output-path nil)
           ;; File should exist
           (should (file-exists-p output-path))
           ;; File should have content
@@ -315,77 +376,67 @@
 
 ;;; --- Integration Tests ---
 
-(ert-deftest gypsum-test-full-workflow-dark ()
-  "Test complete workflow for dark theme."
+(ert-deftest gypsum-test-full-workflow-preset ()
+  "Test complete workflow using a preset."
   (let* ((temp-dir (make-temp-file "gypsum-test" t))
-         (output-path (expand-file-name "my-dark-theme.el" temp-dir)))
+         (output-path (expand-file-name "alabaster-dark-theme.el" temp-dir))
+         (palette (gypsum-preset-get 'alabaster-dark)))
     (unwind-protect
         (progn
           ;; Generate theme
-          (gypsum-generate "my-dark"
-                           :seed "#71ADE7"
-                           :variant 'dark
-                           :contrast 'normal
-                           :output output-path
-                           :load nil)
+          (gypsum-generate-from-palette "alabaster-dark" palette output-path nil)
           ;; Verify file
           (should (file-exists-p output-path))
           ;; Load and verify theme
           (load output-path nil t)
-          (should (memq 'my-dark (custom-available-themes))))
+          (should (memq 'alabaster-dark (custom-available-themes))))
       ;; Cleanup
       (when (file-exists-p output-path)
         (delete-file output-path))
       (delete-directory temp-dir))))
 
-(ert-deftest gypsum-test-full-workflow-light ()
-  "Test complete workflow for light theme."
+(ert-deftest gypsum-test-full-workflow-tinted ()
+  "Test complete workflow with tinted preset."
   (let* ((temp-dir (make-temp-file "gypsum-test" t))
-         (output-path (expand-file-name "my-light-theme.el" temp-dir)))
+         (output-path (expand-file-name "tinted-theme.el" temp-dir))
+         (base (gypsum-preset-get 'alabaster-light))
+         (palette (gypsum-palette-tint base :mode 'hue-shift :degrees 60)))
     (unwind-protect
         (progn
           ;; Generate theme
-          (gypsum-generate "my-light"
-                           :seed "#325CC0"
-                           :variant 'light
-                           :contrast 'normal
-                           :output output-path
-                           :load nil)
+          (gypsum-generate-from-palette "tinted" palette output-path nil)
           ;; Verify file
           (should (file-exists-p output-path))
           ;; Load and verify theme
           (load output-path nil t)
-          (should (memq 'my-light (custom-available-themes))))
+          (should (memq 'tinted (custom-available-themes))))
       ;; Cleanup
       (when (file-exists-p output-path)
         (delete-file output-path))
       (delete-directory temp-dir))))
 
-(ert-deftest gypsum-test-generate-all ()
-  "Test generating all 4 theme variants."
-  (let* ((temp-dir (make-temp-file "gypsum-test" t)))
+(ert-deftest gypsum-test-full-workflow-generated ()
+  "Test complete workflow with seed-generated palette."
+  (let* ((temp-dir (make-temp-file "gypsum-test" t))
+         (output-path (expand-file-name "generated-theme.el" temp-dir))
+         (palette (gypsum-palette-generate "#5E81AC" 'dark)))
     (unwind-protect
-        (let ((results (gypsum-generate-all "test"
-                                            :seed "#5E81AC"
-                                            :output-dir temp-dir)))
-          ;; Should return 4 paths
-          (should (= (length results) 4))
-          ;; All files should exist
-          (should (file-exists-p (expand-file-name "test-dark-theme.el" temp-dir)))
-          (should (file-exists-p (expand-file-name "test-dark-lc-theme.el" temp-dir)))
-          (should (file-exists-p (expand-file-name "test-light-theme.el" temp-dir)))
-          (should (file-exists-p (expand-file-name "test-light-lc-theme.el" temp-dir)))
-          ;; All files should be loadable
-          (dolist (path results)
-            (should (ignore-errors (load path nil t) t))))
+        (progn
+          ;; Generate theme
+          (gypsum-generate-from-palette "generated" palette output-path nil)
+          ;; Verify file
+          (should (file-exists-p output-path))
+          ;; Load and verify theme
+          (load output-path nil t)
+          (should (memq 'generated (custom-available-themes))))
       ;; Cleanup
-      (dolist (file (directory-files temp-dir t "\\.el$"))
-        (delete-file file))
+      (when (file-exists-p output-path)
+        (delete-file output-path))
       (delete-directory temp-dir))))
 
 (ert-deftest gypsum-test-preview-create-temp-theme ()
   "Test that preview creates a valid temporary theme."
-  (let* ((palette (gypsum-palette-create :seed "#3498DB" :variant 'dark))
+  (let* ((palette (gypsum-preset-get 'alabaster-dark))
          (result (gypsum-ui--preview-create-temp-theme palette))
          (theme-name (car result))
          (face-list (cdr result)))
@@ -402,30 +453,6 @@
           (should (> (length face-list) 0)))
       ;; Cleanup
       (disable-theme theme-name))))
-
-(ert-deftest gypsum-test-derive-opposite-background ()
-  "Test deriving opposite variant backgrounds."
-  ;; Light background -> derive dark
-  (let* ((light-bg "#FDF6E3")  ; Solarized Light
-         (derived-dark (gypsum-ui--derive-opposite-background light-bg 'dark)))
-    ;; Derived should be dark
-    (should-not (gypsum-color-light-p derived-dark))
-    ;; Derived should be very dark (lightness ~6%)
-    (let ((dark-hsl (gypsum-color-hex-to-hsl derived-dark)))
-      (should (< (nth 2 dark-hsl) 10))))
-  ;; Dark background -> derive light
-  (let* ((dark-bg "#002B36")  ; Solarized Dark
-         (derived-light (gypsum-ui--derive-opposite-background dark-bg 'light)))
-    ;; Derived should be light
-    (should (gypsum-color-light-p derived-light))
-    ;; Derived should be very light (lightness ~97%)
-    (let ((light-hsl (gypsum-color-hex-to-hsl derived-light)))
-      (should (> (nth 2 light-hsl) 90))))
-  ;; Same variant -> return unchanged
-  (let ((light-bg "#F7F7F7"))
-    (should (equal (gypsum-ui--derive-opposite-background light-bg 'light) light-bg)))
-  (let ((dark-bg "#1A1A1A"))
-    (should (equal (gypsum-ui--derive-opposite-background dark-bg 'dark) dark-bg))))
 
 (provide 'gypsum-test)
 

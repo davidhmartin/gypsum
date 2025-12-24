@@ -1,356 +1,300 @@
-;;; gypsum-palette.el --- Palette generation for Gypsum -*- lexical-binding: t; -*-
+;;; gypsum-palette.el --- Palette operations for Gypsum -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2025
 
-;; Author: Gypsum Contributors
+;; Author: David
 ;; Keywords: faces, themes, colors
 
-;; This file is not part of GNU Emacs.
+;; This file is part of Gypsum.
 
 ;;; Commentary:
 
-;; Generates complete color palettes from a seed color following
-;; Alabaster/minimal highlighting principles.  The seed becomes the
-;; definition color, and other semantic colors are derived via
-;; color wheel relationships.
+;; This file provides operations on color palettes:
+;; - Tinting palettes with various modes
+;; - Deriving dark variants from light palettes
+;; - Seed-based palette generation (stub)
+;;
+;; Palettes are plists with keys defined in gypsum-presets.el.
 
 ;;; Code:
 
 (require 'gypsum-color)
+(require 'gypsum-presets)
 
-;;; --- Configuration ---
+;;; Tinting modes
+;;
+;; Three ways to tint a palette:
+;; 1. hue-shift - rotate all semantic colors by N degrees
+;; 2. definition-only - replace definition color, keep others
+;; 3. blend - blend all colors toward an accent color
 
-(defcustom gypsum-string-hue-offset -120
-  "Hue rotation from seed to derive string color."
-  :type 'number
-  :group 'gypsum)
+(defun gypsum-palette-tint (palette &rest args)
+  "Tint PALETTE using the specified mode.
 
-(defcustom gypsum-constant-hue-offset 60
-  "Hue rotation from seed to derive constant color."
-  :type 'number
-  :group 'gypsum)
+ARGS is a plist with:
+  :mode MODE - Tinting mode: \\='hue-shift, \\='definition-only, or \\='blend
 
-(defcustom gypsum-comment-hue-offset-light 150
-  "Hue rotation from seed to derive comment color for light themes."
-  :type 'number
-  :group 'gypsum)
+For hue-shift mode:
+  :degrees N - Number of degrees to rotate (default 0)
 
-(defcustom gypsum-comment-hue-offset-dark 165
-  "Hue rotation from seed to derive comment color for dark themes.
-Shifted toward yellow for better readability on dark backgrounds."
-  :type 'number
-  :group 'gypsum)
+For definition-only mode:
+  :definition COLOR - The new definition color
 
-;;; --- Background Generation ---
+For blend mode:
+  :color COLOR - Color to blend toward
+  :amount N - Blend percentage 0-100 (default 20)
 
-(defun gypsum-palette--default-background (variant seed)
-  "Generate default background color for VARIANT using SEED for subtle tinting."
-  (let* ((seed-hsl (gypsum-color-hex-to-hsl seed))
-         (seed-hue (nth 0 seed-hsl)))
-    (pcase variant
-      ('light
-       ;; Light background: very light, slightly tinted by seed
-       (gypsum-color-hsl-to-hex seed-hue 5.0 97.0))
-      ('dark
-       ;; Dark background: very dark, slightly tinted by seed
-       (gypsum-color-hsl-to-hex seed-hue 10.0 6.0))
+Returns a new palette with tinted colors."
+  (let ((mode (plist-get args :mode)))
+    (pcase mode
+      ('hue-shift
+       (gypsum-palette--tint-hue-shift palette (or (plist-get args :degrees) 0)))
+      ('definition-only
+       (gypsum-palette--tint-definition-only palette (plist-get args :definition)))
+      ('blend
+       (gypsum-palette--tint-blend palette
+                                    (plist-get args :color)
+                                    (or (plist-get args :amount) 20)))
       (_
-       (error "Unknown variant: %s" variant)))))
+       (error "Unknown tinting mode: %s" mode)))))
 
-;;; --- Semantic Color Derivation ---
-
-(defun gypsum-palette--derive-string (seed variant)
-  "Derive string color from SEED for VARIANT."
-  (let* ((rotated (gypsum-color-rotate seed gypsum-string-hue-offset))
-         (hsl (gypsum-color-hex-to-hsl rotated)))
-    (pcase variant
-      ('light
-       ;; Light theme: higher saturation, medium lightness
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 60.0 35.0))
-      ('dark
-       ;; Dark theme: lower saturation, higher lightness (muted pastel)
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 40.0 70.0)))))
-
-(defun gypsum-palette--derive-constant (seed variant)
-  "Derive constant color from SEED for VARIANT."
-  (let* ((rotated (gypsum-color-rotate seed gypsum-constant-hue-offset))
-         (hsl (gypsum-color-hex-to-hsl rotated)))
-    (pcase variant
-      ('light
-       ;; Light theme: rich saturation, medium lightness
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 55.0 40.0))
-      ('dark
-       ;; Dark theme: muted, lighter
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 45.0 75.0)))))
-
-(defun gypsum-palette--derive-comment (seed variant)
-  "Derive comment color from SEED for VARIANT."
-  (let* ((offset (pcase variant
-                   ('light gypsum-comment-hue-offset-light)
-                   ('dark gypsum-comment-hue-offset-dark)))
-         (rotated (gypsum-color-rotate seed offset))
-         (hsl (gypsum-color-hex-to-hsl rotated)))
-    (pcase variant
-      ('light
-       ;; Light theme: saturated, visible red-ish
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 60.0 40.0))
-      ('dark
-       ;; Dark theme: desaturated yellow for readability
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 50.0 75.0)))))
-
-(defun gypsum-palette--adjust-definition (seed variant)
-  "Adjust SEED (definition color) for optimal display in VARIANT."
-  (let ((hsl (gypsum-color-hex-to-hsl seed)))
-    (pcase variant
-      ('light
-       ;; Light theme: ensure sufficient saturation and darker
-       (gypsum-color-hsl-to-hex
-        (nth 0 hsl)
-        (max 50.0 (nth 1 hsl))
-        (min 45.0 (max 30.0 (nth 2 hsl)))))
-      ('dark
-       ;; Dark theme: ensure visible, possibly lighter
-       (gypsum-color-hsl-to-hex
-        (nth 0 hsl)
-        (max 40.0 (min 70.0 (nth 1 hsl)))
-        (max 60.0 (min 80.0 (nth 2 hsl))))))))
-
-;;; --- Supporting Color Derivation ---
-
-(defun gypsum-palette--derive-foreground (background)
-  "Derive foreground color for BACKGROUND."
-  (if (gypsum-color-light-p background)
-      "#000000"
-    "#CECECE"))
-
-(defun gypsum-palette--derive-fg-dim (background foreground)
-  "Derive dimmed foreground for BACKGROUND given FOREGROUND."
-  (gypsum-color-blend foreground background 0.5))
-
-(defun gypsum-palette--derive-bg-alt (background variant)
-  "Derive alternate background for BACKGROUND in VARIANT."
-  (pcase variant
-    ('light (gypsum-color-darken background 4))
-    ('dark (gypsum-color-lighten background 5))))
-
-(defun gypsum-palette--derive-selection (seed variant)
-  "Derive selection color from SEED for VARIANT."
-  (let ((hsl (gypsum-color-hex-to-hsl seed)))
-    (pcase variant
-      ('light
-       ;; Light selection: desaturated, very light version of seed
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 60.0 85.0))
-      ('dark
-       ;; Dark selection: desaturated, dark version of seed
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 50.0 30.0)))))
-
-(defun gypsum-palette--derive-highlight (seed variant)
-  "Derive highlight/cursor color from SEED for VARIANT."
-  (let ((hsl (gypsum-color-hex-to-hsl seed)))
-    (pcase variant
-      ('light
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 80.0 45.0))
-      ('dark
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 70.0 55.0)))))
-
-(defun gypsum-palette--derive-find-hl (seed variant)
-  "Derive find/search highlight from SEED for VARIANT."
-  ;; Use a warm color (orange-ish) shifted from seed
-  (let* ((rotated (gypsum-color-rotate seed 40))
-         (hsl (gypsum-color-hex-to-hsl rotated)))
-    (pcase variant
-      ('light
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 80.0 70.0))
-      ('dark
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 70.0 35.0)))))
-
-;;; --- Status Colors (Harmonized) ---
-
-(defun gypsum-palette--derive-error (seed variant)
-  "Derive error color harmonized with SEED for VARIANT.
-Shifts toward red while maintaining some harmony with seed."
-  (let* ((seed-hsl (gypsum-color-hex-to-hsl seed))
-         (seed-hue (nth 0 seed-hsl))
-         ;; Target red (~0-10 degrees), blend with seed influence
-         (target-hue (mod (+ 0 (* (mod (- seed-hue 0) 180) 0.1)) 360)))
-    (pcase variant
-      ('light
-       (gypsum-color-hsl-to-hex target-hue 75.0 45.0))
-      ('dark
-       (gypsum-color-hsl-to-hex target-hue 70.0 60.0)))))
-
-(defun gypsum-palette--derive-warning (seed variant)
-  "Derive warning color harmonized with SEED for VARIANT.
-Shifts toward yellow/orange while maintaining some harmony."
-  (let* ((seed-hsl (gypsum-color-hex-to-hsl seed))
-         (seed-hue (nth 0 seed-hsl))
-         ;; Target yellow/orange (~40-50 degrees)
-         (target-hue (mod (+ 45 (* (mod (- seed-hue 45) 180) 0.1)) 360)))
-    (pcase variant
-      ('light
-       (gypsum-color-hsl-to-hex target-hue 80.0 40.0))
-      ('dark
-       (gypsum-color-hsl-to-hex target-hue 70.0 55.0)))))
-
-(defun gypsum-palette--derive-success (string-color variant)
-  "Derive success color from STRING-COLOR for VARIANT.
-Success typically aligns with green, and string is usually green-ish."
-  (let ((hsl (gypsum-color-hex-to-hsl string-color)))
-    (pcase variant
-      ('light
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 65.0 35.0))
-      ('dark
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 50.0 65.0)))))
-
-;;; --- Diff Colors ---
-
-(defun gypsum-palette--derive-diff-add-bg (success-color variant)
-  "Derive diff added background from SUCCESS-COLOR for VARIANT."
-  (let ((hsl (gypsum-color-hex-to-hsl success-color)))
-    (pcase variant
-      ('light
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 40.0 90.0))
-      ('dark
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 35.0 15.0)))))
-
-(defun gypsum-palette--derive-diff-del-bg (error-color variant)
-  "Derive diff deleted background from ERROR-COLOR for VARIANT."
-  (let ((hsl (gypsum-color-hex-to-hsl error-color)))
-    (pcase variant
-      ('light
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 40.0 92.0))
-      ('dark
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 35.0 15.0)))))
-
-(defun gypsum-palette--derive-diff-chg-bg (warning-color variant)
-  "Derive diff changed background from WARNING-COLOR for VARIANT."
-  (let ((hsl (gypsum-color-hex-to-hsl warning-color)))
-    (pcase variant
-      ('light
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 50.0 92.0))
-      ('dark
-       (gypsum-color-hsl-to-hex (nth 0 hsl) 40.0 15.0)))))
-
-;;; --- Low Contrast Adjustments ---
-
-(defun gypsum-palette--apply-low-contrast (palette)
-  "Apply low contrast adjustments to PALETTE."
-  (let* ((variant (plist-get palette :variant))
-         (fg (plist-get palette :foreground)))
-    ;; Reduce contrast by moving fg closer to bg
-    (setq palette
-          (plist-put palette :foreground
-                     (pcase variant
-                       ('light (gypsum-color-lighten fg 20))
-                       ('dark (gypsum-color-darken fg 15)))))
-    ;; Also adjust semantic colors to be less vibrant
+(defun gypsum-palette--tint-hue-shift (palette degrees)
+  "Rotate all semantic colors in PALETTE by DEGREES."
+  (let ((result (copy-sequence palette)))
+    ;; Rotate the 4 semantic colors
     (dolist (key '(:string :constant :comment :definition))
       (let ((color (plist-get palette key)))
-        (setq palette
-              (plist-put palette key
-                         (gypsum-color-desaturate color 15)))))
-    palette))
+        (setq result (plist-put result key (gypsum-color-rotate color degrees)))))
+    ;; Also rotate UI colors that should match
+    (dolist (key '(:selection :highlight :find-hl))
+      (let ((color (plist-get palette key)))
+        (when color
+          (setq result (plist-put result key (gypsum-color-rotate color degrees))))))
+    ;; Rotate status/diff colors
+    (dolist (key '(:error :warning :success :diff-add-bg :diff-del-bg :diff-chg-bg))
+      (let ((color (plist-get palette key)))
+        (when color
+          (setq result (plist-put result key (gypsum-color-rotate color degrees))))))
+    result))
 
-;;; --- Main Palette Creation ---
+(defun gypsum-palette--tint-definition-only (palette definition)
+  "Replace only the definition color in PALETTE with DEFINITION."
+  (unless definition
+    (error "Must provide :definition color"))
+  (let ((result (copy-sequence palette)))
+    (plist-put result :definition definition)))
 
-(cl-defun gypsum-palette-create (&key seed variant contrast
-                                      background string constant
-                                      comment definition)
-  "Create a complete color palette.
+(defun gypsum-palette--tint-blend (palette color amount)
+  "Blend all colors in PALETTE toward COLOR by AMOUNT percent."
+  (unless color
+    (error "Must provide :color to blend toward"))
+  (let ((result (copy-sequence palette))
+        (blend-ratio (/ amount 100.0)))
+    ;; Blend semantic colors
+    (dolist (key '(:string :constant :comment :definition))
+      (let ((orig (plist-get palette key)))
+        (setq result (plist-put result key (gypsum-color-blend orig color blend-ratio)))))
+    ;; Blend UI colors (less intensely)
+    (let ((ui-ratio (* blend-ratio 0.5)))
+      (dolist (key '(:selection :highlight :find-hl))
+        (let ((orig (plist-get palette key)))
+          (when orig
+            (setq result (plist-put result key (gypsum-color-blend orig color ui-ratio)))))))
+    result))
 
-Required arguments (one of):
-  :seed HEXCOLOR      - Base color (becomes definition), derive others
-  :background + :definition - Explicit bg and definition
+;;; Deriving dark from light
 
-Optional arguments:
-  :variant SYMBOL     - \\='light or \\='dark (inferred from bg if not specified)
-  :contrast SYMBOL    - \\='normal (default) or \\='low
-  :string HEXCOLOR    - Override string color
-  :constant HEXCOLOR  - Override constant color
-  :comment HEXCOLOR   - Override comment color
+(defun gypsum-palette-derive-dark (light-palette)
+  "Derive a dark palette from LIGHT-PALETTE.
 
-Returns a plist with all palette colors."
-  (let (palette)
-    ;; Validate inputs
-    (unless (or seed (and background definition))
-      (error "Must provide :seed or both :background and :definition"))
+Adjusts lightness and saturation of colors for dark background display."
+  (unless (eq (plist-get light-palette :variant) 'light)
+    (error "Can only derive dark from a light palette"))
+  (let ((result (copy-sequence light-palette)))
+    ;; Set variant
+    (setq result (plist-put result :variant 'dark))
+    ;; Invert base colors
+    (setq result (plist-put result :background
+                            (gypsum-palette--dark-background light-palette)))
+    (setq result (plist-put result :foreground "#D4D4D4"))
+    (setq result (plist-put result :fg-dim "#808080"))
+    (setq result (plist-put result :bg-alt
+                            (gypsum-color-lighten (plist-get result :background) 5)))
+    ;; Adjust semantic colors for dark readability
+    (dolist (key '(:string :constant :comment :definition))
+      (let ((color (plist-get light-palette key)))
+        (setq result (plist-put result key
+                                (gypsum-palette--adjust-for-dark color)))))
+    ;; Adjust UI colors
+    (setq result (plist-put result :selection
+                            (gypsum-palette--dark-selection
+                             (plist-get light-palette :definition))))
+    (setq result (plist-put result :find-hl
+                            (gypsum-palette--dark-find-hl
+                             (plist-get light-palette :find-hl))))
+    ;; Adjust status colors
+    (dolist (key '(:error :warning :success))
+      (let ((color (plist-get light-palette key)))
+        (setq result (plist-put result key
+                                (gypsum-palette--adjust-for-dark color)))))
+    ;; Adjust diff colors
+    (dolist (key '(:diff-add-bg :diff-del-bg :diff-chg-bg))
+      (let ((color (plist-get light-palette key)))
+        (setq result (plist-put result key
+                                (gypsum-palette--dark-diff-bg color)))))
+    result))
 
-    ;; Use seed as definition if not explicitly provided
-    (unless definition
-      (setq definition seed))
+(defun gypsum-palette--dark-background (light-palette)
+  "Generate dark background from LIGHT-PALETTE."
+  (let* ((light-bg (plist-get light-palette :background))
+         (hsl (gypsum-color-hex-to-hsl light-bg)))
+    ;; Very dark with subtle hue from light bg
+    (gypsum-color-hsl-to-hex (nth 0 hsl) 8.0 12.0)))
 
-    ;; Determine variant
-    (unless variant
-      (if background
-          (setq variant (if (gypsum-color-light-p background) 'light 'dark))
-        (error "Must specify :variant when using :seed alone")))
+(defun gypsum-palette--adjust-for-dark (color)
+  "Adjust COLOR for readability on dark background."
+  (let ((hsl (gypsum-color-hex-to-hsl color)))
+    ;; Increase lightness, slightly reduce saturation
+    (gypsum-color-hsl-to-hex
+     (nth 0 hsl)
+     (max 30.0 (min 70.0 (nth 1 hsl)))
+     (max 55.0 (min 80.0 (+ (nth 2 hsl) 25.0))))))
 
-    ;; Generate or use background
-    (unless background
-      (setq background (gypsum-palette--default-background variant seed)))
+(defun gypsum-palette--dark-selection (definition)
+  "Generate dark selection color from DEFINITION."
+  (let ((hsl (gypsum-color-hex-to-hsl definition)))
+    (gypsum-color-hsl-to-hex (nth 0 hsl) 50.0 25.0)))
 
-    ;; Adjust definition for variant
-    (setq definition (gypsum-palette--adjust-definition definition variant))
+(defun gypsum-palette--dark-find-hl (light-find-hl)
+  "Generate dark find highlight from LIGHT-FIND-HL."
+  (let ((hsl (gypsum-color-hex-to-hsl light-find-hl)))
+    (gypsum-color-hsl-to-hex (nth 0 hsl) 70.0 25.0)))
 
-    ;; Derive semantic colors (use overrides if provided)
-    (setq string (or string (gypsum-palette--derive-string definition variant)))
-    (setq constant (or constant (gypsum-palette--derive-constant definition variant)))
-    (setq comment (or comment (gypsum-palette--derive-comment definition variant)))
+(defun gypsum-palette--dark-diff-bg (light-diff-bg)
+  "Generate dark diff background from LIGHT-DIFF-BG."
+  (let ((hsl (gypsum-color-hex-to-hsl light-diff-bg)))
+    (gypsum-color-hsl-to-hex (nth 0 hsl) 35.0 18.0)))
 
-    ;; Derive supporting colors
-    (let* ((foreground (gypsum-palette--derive-foreground background))
-           (fg-dim (gypsum-palette--derive-fg-dim background foreground))
-           (bg-alt (gypsum-palette--derive-bg-alt background variant))
-           (selection (gypsum-palette--derive-selection definition variant))
-           (highlight (gypsum-palette--derive-highlight definition variant))
-           (find-hl (gypsum-palette--derive-find-hl definition variant))
-           (error-color (gypsum-palette--derive-error definition variant))
-           (warning-color (gypsum-palette--derive-warning definition variant))
-           (success-color (gypsum-palette--derive-success string variant))
-           (diff-add-bg (gypsum-palette--derive-diff-add-bg success-color variant))
-           (diff-del-bg (gypsum-palette--derive-diff-del-bg error-color variant))
-           (diff-chg-bg (gypsum-palette--derive-diff-chg-bg warning-color variant)))
+;;; Deriving light from dark
 
-      ;; Build palette plist
-      (setq palette
-            (list :variant variant
-                  :contrast (or contrast 'normal)
-                  ;; Core
-                  :background background
-                  :foreground foreground
-                  :fg-dim fg-dim
-                  :bg-alt bg-alt
-                  ;; Semantic 4
-                  :string string
-                  :constant constant
-                  :comment comment
-                  :definition definition
-                  ;; UI
-                  :selection selection
-                  :highlight highlight
-                  :find-hl find-hl
-                  ;; Status
-                  :error error-color
-                  :warning warning-color
-                  :success success-color
-                  ;; Diff
-                  :diff-add-bg diff-add-bg
-                  :diff-del-bg diff-del-bg
-                  :diff-chg-bg diff-chg-bg)))
+(defun gypsum-palette-derive-light (dark-palette)
+  "Derive a light palette from DARK-PALETTE.
 
-    ;; Apply low contrast if requested
-    (when (eq contrast 'low)
-      (setq palette (gypsum-palette--apply-low-contrast palette)))
+Adjusts lightness and saturation of colors for light background display."
+  (unless (eq (plist-get dark-palette :variant) 'dark)
+    (error "Can only derive light from a dark palette"))
+  (let ((result (copy-sequence dark-palette)))
+    ;; Set variant
+    (setq result (plist-put result :variant 'light))
+    ;; Invert base colors
+    (setq result (plist-put result :background
+                            (gypsum-palette--light-background dark-palette)))
+    (setq result (plist-put result :foreground "#000000"))
+    (setq result (plist-put result :fg-dim "#777777"))
+    (setq result (plist-put result :bg-alt
+                            (gypsum-color-darken (plist-get result :background) 5)))
+    ;; Adjust semantic colors for light readability
+    (dolist (key '(:string :constant :comment :definition))
+      (let ((color (plist-get dark-palette key)))
+        (setq result (plist-put result key
+                                (gypsum-palette--adjust-for-light color)))))
+    ;; Adjust UI colors
+    (setq result (plist-put result :selection
+                            (gypsum-palette--light-selection
+                             (plist-get dark-palette :definition))))
+    (setq result (plist-put result :find-hl
+                            (gypsum-palette--light-find-hl
+                             (plist-get dark-palette :find-hl))))
+    ;; Adjust status colors
+    (dolist (key '(:error :warning :success))
+      (let ((color (plist-get dark-palette key)))
+        (setq result (plist-put result key
+                                (gypsum-palette--adjust-for-light color)))))
+    ;; Adjust diff colors
+    (dolist (key '(:diff-add-bg :diff-del-bg :diff-chg-bg))
+      (let ((color (plist-get dark-palette key)))
+        (setq result (plist-put result key
+                                (gypsum-palette--light-diff-bg color)))))
+    result))
 
-    palette))
+(defun gypsum-palette--light-background (dark-palette)
+  "Generate light background from DARK-PALETTE."
+  (let* ((dark-bg (plist-get dark-palette :background))
+         (hsl (gypsum-color-hex-to-hsl dark-bg)))
+    ;; Very light with subtle hue from dark bg
+    (gypsum-color-hsl-to-hex (nth 0 hsl) 5.0 97.0)))
+
+(defun gypsum-palette--adjust-for-light (color)
+  "Adjust COLOR for readability on light background."
+  (let ((hsl (gypsum-color-hex-to-hsl color)))
+    ;; Decrease lightness, adjust saturation for vibrancy
+    (gypsum-color-hsl-to-hex
+     (nth 0 hsl)
+     (max 40.0 (min 80.0 (nth 1 hsl)))
+     (max 30.0 (min 50.0 (- (nth 2 hsl) 20.0))))))
+
+(defun gypsum-palette--light-selection (definition)
+  "Generate light selection color from DEFINITION."
+  (let ((hsl (gypsum-color-hex-to-hsl definition)))
+    (gypsum-color-hsl-to-hex (nth 0 hsl) 60.0 85.0)))
+
+(defun gypsum-palette--light-find-hl (dark-find-hl)
+  "Generate light find highlight from DARK-FIND-HL."
+  (let ((hsl (gypsum-color-hex-to-hsl dark-find-hl)))
+    (gypsum-color-hsl-to-hex (nth 0 hsl) 80.0 75.0)))
+
+(defun gypsum-palette--light-diff-bg (dark-diff-bg)
+  "Generate light diff background from DARK-DIFF-BG."
+  (let ((hsl (gypsum-color-hex-to-hsl dark-diff-bg)))
+    (gypsum-color-hsl-to-hex (nth 0 hsl) 50.0 90.0)))
+
+;;; Seed-based generation (stub)
+
+(defun gypsum-palette-generate (seed variant)
+  "Generate a palette from SEED color for VARIANT.
+
+SEED is a hex color string (the definition color).
+VARIANT is \\='light or \\='dark.
+
+This is currently a stub that uses the closest preset.
+The algorithm may be improved in the future."
+  ;; For now, start with alabaster and tint toward the seed
+  (let* ((base-name (if (eq variant 'dark) 'alabaster-dark 'alabaster-light))
+         (base (gypsum-preset-get base-name))
+         (base-def (plist-get base :definition))
+         (hue-diff (gypsum-palette--hue-difference seed base-def)))
+    (gypsum-palette-tint base :mode 'hue-shift :degrees hue-diff)))
+
+(defun gypsum-palette--hue-difference (color1 color2)
+  "Calculate the hue difference between COLOR1 and COLOR2 in degrees."
+  (let ((hsl1 (gypsum-color-hex-to-hsl color1))
+        (hsl2 (gypsum-color-hex-to-hsl color2)))
+    (- (nth 0 hsl1) (nth 0 hsl2))))
+
+;;; Utility functions
+
+(defun gypsum-palette-get (palette key)
+  "Get KEY from PALETTE, with validation."
+  (or (plist-get palette key)
+      (error "Palette missing key: %s" key)))
+
+(defun gypsum-palette-set (palette key value)
+  "Set KEY to VALUE in PALETTE, returning a new palette."
+  (let ((result (copy-sequence palette)))
+    (plist-put result key value)))
+
+(defun gypsum-palette-name (palette)
+  "Get the display name for PALETTE."
+  (format "%s-%s"
+          (plist-get palette :name)
+          (plist-get palette :variant)))
 
 (defun gypsum-palette-to-alist (palette)
-  "Convert PALETTE plist to an alist for easier use in theme generation."
+  "Convert PALETTE plist to an alist."
   (let (alist)
     (cl-loop for (key val) on palette by #'cddr
              do (push (cons key val) alist))
     (nreverse alist)))
 
 (provide 'gypsum-palette)
-
 ;;; gypsum-palette.el ends here
