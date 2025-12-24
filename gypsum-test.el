@@ -14,6 +14,8 @@
 (require 'gypsum-palette)
 (require 'gypsum-faces)
 (require 'gypsum-generate)
+(require 'gypsum-discover)
+(require 'gypsum-sources)
 (require 'gypsum-ui)
 
 ;;; --- Color Conversion Tests ---
@@ -453,6 +455,140 @@
           (should (> (length face-list) 0)))
       ;; Cleanup
       (disable-theme theme-name))))
+
+;;; --- Discovery Tests ---
+
+(ert-deftest gypsum-test-discover-file-to-theme-name ()
+  "Test extracting theme name from file path."
+  (should (equal (gypsum-discover--file-to-theme-name "/path/to/my-theme.el")
+                 "my"))
+  (should (equal (gypsum-discover--file-to-theme-name "alabaster-dark-theme.el")
+                 "alabaster-dark")))
+
+(ert-deftest gypsum-test-discover-has-marker-p ()
+  "Test marker detection in theme files."
+  (let* ((temp-dir (make-temp-file "gypsum-test" t))
+         (with-marker (expand-file-name "marked-theme.el" temp-dir))
+         (without-marker (expand-file-name "plain-theme.el" temp-dir)))
+    (unwind-protect
+        (progn
+          ;; Create file with marker
+          (with-temp-file with-marker
+            (insert "(deftheme marked)\n")
+            (insert "(defconst marked-gypsum-generated t)\n"))
+          ;; Create file without marker
+          (with-temp-file without-marker
+            (insert "(deftheme plain)\n"))
+          ;; Test detection
+          (should (gypsum-discover--has-marker-p with-marker))
+          (should-not (gypsum-discover--has-marker-p without-marker)))
+      ;; Cleanup
+      (when (file-exists-p with-marker)
+        (delete-file with-marker))
+      (when (file-exists-p without-marker)
+        (delete-file without-marker))
+      (delete-directory temp-dir))))
+
+(ert-deftest gypsum-test-generate-includes-palette-defconst ()
+  "Test that generated themes include palette defconst for discovery."
+  (let* ((temp-dir (make-temp-file "gypsum-test" t))
+         (output-path (expand-file-name "discover-test-theme.el" temp-dir))
+         (palette (gypsum-preset-get 'alabaster-dark)))
+    (unwind-protect
+        (progn
+          (gypsum-generate-from-palette "discover-test" palette output-path nil)
+          ;; File should contain gypsum-generated marker
+          (with-temp-buffer
+            (insert-file-contents output-path)
+            (should (search-forward "discover-test-gypsum-generated" nil t))
+            (goto-char (point-min))
+            (should (search-forward "discover-test-gypsum-palette" nil t))))
+      ;; Cleanup
+      (when (file-exists-p output-path)
+        (delete-file output-path))
+      (delete-directory temp-dir))))
+
+(ert-deftest gypsum-test-discover-extract-palette ()
+  "Test palette extraction from generated theme."
+  (let* ((temp-dir (make-temp-file "gypsum-test" t))
+         (output-path (expand-file-name "extract-test-theme.el" temp-dir))
+         (palette (gypsum-preset-get 'alabaster-dark)))
+    (unwind-protect
+        (progn
+          (gypsum-generate-from-palette "extract-test" palette output-path nil)
+          ;; Extract palette
+          (let ((extracted (gypsum-discover--extract-palette output-path)))
+            (should extracted)
+            (should (eq (plist-get extracted :variant) 'dark))
+            (should (equal (plist-get extracted :string)
+                           (plist-get palette :string)))))
+      ;; Cleanup
+      (when (file-exists-p output-path)
+        (delete-file output-path))
+      (makunbound 'extract-test-gypsum-palette)
+      (makunbound 'extract-test-gypsum-generated)
+      (delete-directory temp-dir))))
+
+;;; --- Sources API Tests ---
+
+(ert-deftest gypsum-test-sources-list ()
+  "Test unified sources list."
+  (let ((sources (gypsum-sources-list)))
+    ;; Should include presets
+    (should (cl-some (lambda (s) (eq (plist-get s :type) 'preset)) sources))
+    ;; Each source should have required keys
+    (dolist (source sources)
+      (should (plist-get source :name))
+      (should (plist-get source :type)))))
+
+(ert-deftest gypsum-test-sources-get-palette ()
+  "Test getting palette from sources."
+  ;; Preset should work
+  (let ((palette (gypsum-sources-get-palette 'alabaster-light)))
+    (should palette)
+    (should (eq (plist-get palette :variant) 'light)))
+  ;; Non-existent should return nil
+  (should-not (gypsum-sources-get-palette 'nonexistent-theme-xyz)))
+
+(ert-deftest gypsum-test-sources-preset-p ()
+  "Test preset detection."
+  (should (gypsum-sources-preset-p 'alabaster-light))
+  (should (gypsum-sources-preset-p 'alabaster-dark))
+  (should-not (gypsum-sources-preset-p 'nonexistent)))
+
+;;; --- Generate and Discover Roundtrip ---
+
+(ert-deftest gypsum-test-generate-discover-roundtrip ()
+  "Test that generated themes can be discovered and palettes extracted."
+  (let* ((temp-dir (make-temp-file "gypsum-test" t))
+         (output-path (expand-file-name "roundtrip-theme.el" temp-dir))
+         (original-palette (gypsum-preset-get 'alabaster-light))
+         (gypsum-output-directory temp-dir)
+         (gypsum-discover--cache nil)
+         (gypsum-discover--cache-time nil))
+    (unwind-protect
+        (progn
+          ;; Generate theme
+          (gypsum-generate-from-palette "roundtrip" original-palette output-path nil)
+          ;; Refresh discovery
+          (gypsum-discover-refresh)
+          ;; Should find the theme
+          (let ((discovered (gypsum-discover-themes)))
+            (should (assq 'roundtrip discovered)))
+          ;; Should extract matching palette
+          (let ((extracted (gypsum-discover-get-palette 'roundtrip)))
+            (should extracted)
+            (should (eq (plist-get extracted :variant)
+                        (plist-get original-palette :variant)))
+            (should (equal (plist-get extracted :definition)
+                           (plist-get original-palette :definition)))))
+      ;; Cleanup
+      (when (file-exists-p output-path)
+        (delete-file output-path))
+      (makunbound 'roundtrip-gypsum-palette)
+      (makunbound 'roundtrip-gypsum-generated)
+      (delete-directory temp-dir)
+      (gypsum-discover-refresh))))
 
 (provide 'gypsum-test)
 

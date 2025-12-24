@@ -82,6 +82,8 @@
 (require 'gypsum-palette)
 (require 'gypsum-faces)
 (require 'gypsum-generate)
+(require 'gypsum-discover)
+(require 'gypsum-sources)
 (require 'gypsum-ui)
 
 ;;;###autoload
@@ -96,11 +98,24 @@
 
 ;; Interactive Commands:
 ;;   `gypsum'                    - Main interactive command (guided)
-;;   `gypsum-from-preset'        - Generate from a curated preset
+;;   `gypsum-from-source'        - Generate from preset or discovered theme
+;;   `gypsum-from-preset'        - Alias for gypsum-from-source
 ;;   `gypsum-show-palette'       - Show palette colors
 ;;   `gypsum-preview-dismiss'    - Dismiss current preview
+;;   `gypsum-discover-refresh'   - Refresh discovered themes cache
 ;;
-;; Presets:
+;; Theme Sources (presets + discovered themes):
+;;   `gypsum-sources-list'       - List all sources (presets + discovered)
+;;   `gypsum-sources-get-palette' - Get palette from any source
+;;   `gypsum-sources-preset-p'   - Check if source is a preset
+;;   `gypsum-sources-discovered-p' - Check if source is discovered
+;;
+;; Discovery:
+;;   `gypsum-discover-themes'    - Discover gypsum themes in load path
+;;   `gypsum-discover-get-palette' - Get palette from discovered theme
+;;   `gypsum-discover-list'      - List discovered theme names
+;;
+;; Presets (built-in):
 ;;   `gypsum-preset-get'         - Get a curated preset palette by name
 ;;   `gypsum-preset-list'        - List available preset names
 ;;

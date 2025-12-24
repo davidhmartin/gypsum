@@ -22,6 +22,7 @@
 (require 'gypsum-palette)
 (require 'gypsum-faces)
 (require 'gypsum-generate)
+(require 'gypsum-sources)
 
 ;;; --- Color Picker ---
 
@@ -195,13 +196,41 @@ Otherwise, return the selected color synchronously."
       (recursive-edit)
       gypsum-ui--color-picker-current)))
 
-;;; --- Preset Picker ---
+;;; --- Source Picker ---
 
 (defun gypsum-ui--select-preset ()
-  "Interactively select a preset."
+  "Interactively select a preset (legacy, prefer `gypsum-ui--select-source')."
   (let* ((presets (gypsum-preset-list))
          (preset-names (mapcar #'symbol-name presets)))
     (intern (completing-read "Preset: " preset-names nil t))))
+
+(defun gypsum-ui--select-source ()
+  "Interactively select a theme source (preset or discovered).
+Returns the source name as a symbol."
+  (let* ((sources (gypsum-sources-list))
+         (candidates
+          (mapcar
+           (lambda (s)
+             (let* ((name (plist-get s :name))
+                    (type (plist-get s :type))
+                    (palette (or (plist-get s :palette)
+                                 (when (eq type 'discovered)
+                                   (gypsum-discover-get-palette name))))
+                    (variant (when palette (plist-get palette :variant)))
+                    (label (format "%s%s%s"
+                                   name
+                                   (if variant
+                                       (format " (%s)" variant)
+                                     "")
+                                   (if (eq type 'discovered)
+                                       " [discovered]"
+                                     ""))))
+               (cons label name)))
+           sources))
+         (selection (completing-read "Theme source: "
+                                     (mapcar #'car candidates)
+                                     nil t)))
+    (cdr (assoc selection candidates))))
 
 ;;; --- Live Preview ---
 
@@ -305,22 +334,23 @@ Use `gypsum-preview-dismiss' to remove the preview."
   "Interactively generate Alabaster-style Emacs themes.
 
 Workflow:
-1. Choose a preset or generate from seed color
+1. Choose an existing theme (preset or previously generated) or generate from seed
 2. Optionally apply a transformation (tint or derive variant)
 3. Preview and generate the theme file"
   (interactive)
   (let* ((source (completing-read
                   "Source: "
-                  '("Use preset" "Generate from seed")
+                  '("Use existing theme" "Generate from seed")
                   nil t))
          palette)
     ;; Step 1: Get base palette
     (cond
-     ((string= source "Use preset")
-      (let ((preset (gypsum-ui--select-preset)))
-        (setq palette (gypsum-preset-get preset))
-        (unless palette
-          (error "Preset not found: %s" preset))))
+     ((string= source "Use existing theme")
+      (let* ((source-name (gypsum-ui--select-source))
+             (source-palette (gypsum-sources-get-palette source-name)))
+        (unless source-palette
+          (error "Could not load palette from: %s" source-name))
+        (setq palette source-palette)))
      ((string= source "Generate from seed")
       (let* ((seed (gypsum-ui--pick-color "Select seed color (becomes definition):"))
              (variant (intern (completing-read "Variant: " '("light" "dark") nil t))))
@@ -358,37 +388,45 @@ Workflow:
       (message "Generated: %s" output-path))))
 
 ;;;###autoload
-(defun gypsum-from-preset ()
-  "Generate a theme directly from a curated preset."
+(defun gypsum-from-source ()
+  "Generate a theme from an existing theme source (preset or discovered)."
   (interactive)
-  (let* ((preset (gypsum-ui--select-preset))
-         (palette (gypsum-preset-get preset))
-         (name (read-string (format "Theme name [%s]: " preset)
-                            nil nil (symbol-name preset)))
+  (let* ((source-name (gypsum-ui--select-source))
+         (palette (gypsum-sources-get-palette source-name))
+         (name (read-string (format "Theme name [%s]: " source-name)
+                            nil nil (symbol-name source-name)))
          (output-dir (read-directory-name "Output directory: " gypsum-output-directory)))
     (unless palette
-      (error "Preset not found: %s" preset))
+      (error "Could not load palette from: %s" source-name))
     (gypsum-generate-from-palette
      name palette
      (expand-file-name (format "%s-theme.el" name) output-dir)
      t)))
 
+;;;###autoload
+(defalias 'gypsum-from-preset 'gypsum-from-source
+  "Alias for `gypsum-from-source' for backward compatibility.")
+
 ;;; --- Palette Preview ---
 
 ;;;###autoload
-(defun gypsum-show-palette (&optional preset)
-  "Display a palette for PRESET.
-If called interactively, prompts for preset."
+(defun gypsum-show-palette (&optional source-name)
+  "Display a palette for SOURCE-NAME.
+If called interactively, prompts for source selection."
   (interactive
-   (list (gypsum-ui--select-preset)))
-  (let* ((palette (gypsum-preset-get preset))
+   (list (gypsum-ui--select-source)))
+  (let* ((palette (gypsum-sources-get-palette source-name))
+         (source-type (if (gypsum-sources-preset-p source-name) "preset" "discovered"))
          (buf (get-buffer-create "*Gypsum Palette*")))
+    (unless palette
+      (error "Could not load palette: %s" source-name))
     (with-current-buffer buf
       (let ((inhibit-read-only t))
         (erase-buffer)
         (insert (propertize "Gypsum Palette Preview\n" 'face 'bold))
         (insert "-------------------------------------------\n\n")
-        (insert (format "Preset: %s\nVariant: %s\n\n" preset (plist-get palette :variant)))
+        (insert (format "Source: %s\nType: %s\nVariant: %s\n\n"
+                        source-name source-type (plist-get palette :variant)))
         (insert (propertize "Semantic Colors (The 4 Categories)\n" 'face 'bold))
         (dolist (key '(:string :constant :comment :definition))
           (let ((value (plist-get palette key)))
