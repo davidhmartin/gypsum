@@ -24,8 +24,11 @@
 ;;; --- Configuration ---
 
 (defcustom gypsum-output-directory
-  (expand-file-name "themes" user-emacs-directory)
-  "Default directory for generated theme files."
+  custom-theme-directory
+  "Default directory for generated theme files.
+Defaults to `custom-theme-directory', which is already in
+`custom-theme-load-path' so generated themes are immediately
+available via `load-theme'."
   :type 'directory
   :group 'gypsum)
 
