@@ -24,6 +24,15 @@
 (require 'gypsum-generate)
 (require 'gypsum-sources)
 
+;;; --- Configuration ---
+
+(defcustom gypsum-auto-preview t
+  "When non-nil, automatically preview palette changes.
+Previews are shown immediately after source selection and
+each transform application."
+  :type 'boolean
+  :group 'gypsum)
+
 ;;; --- Color Picker ---
 
 (defvar gypsum-ui--color-picker-callback nil
@@ -281,6 +290,11 @@ Returns the source name as a symbol."
 (defvar gypsum-ui--preview-current-palette nil
   "Palette used to create the current preview.")
 
+(defvar gypsum-ui--palette-history nil
+  "Stack of palettes for undo functionality.
+Most recent palette is at the front (car).
+The base palette (from source selection) is always at the end.")
+
 (defun gypsum-ui--preview-create-temp-theme (palette)
   "Create a temporary theme from PALETTE for preview."
   (let* ((theme-name (intern (format "gypsum-preview-%s" (random 10000))))
@@ -330,6 +344,38 @@ Use `gypsum-preview-dismiss' to remove the preview."
   (setq gypsum-ui--preview-current-palette nil)
   (message "Preview dismissed"))
 
+;;; --- Palette History (for undo) ---
+
+(defun gypsum-ui--history-push (palette)
+  "Push PALETTE onto the history stack."
+  (push palette gypsum-ui--palette-history))
+
+(defun gypsum-ui--history-pop ()
+  "Pop and return the previous palette from history.
+Returns nil if only the base palette remains."
+  (when (> (length gypsum-ui--palette-history) 1)
+    (pop gypsum-ui--palette-history)
+    (car gypsum-ui--palette-history)))
+
+(defun gypsum-ui--history-current ()
+  "Return the current palette from history."
+  (car gypsum-ui--palette-history))
+
+(defun gypsum-ui--history-clear ()
+  "Clear the palette history stack."
+  (setq gypsum-ui--palette-history nil))
+
+(defun gypsum-ui--history-can-undo-p ()
+  "Return non-nil if undo is possible."
+  (> (length gypsum-ui--palette-history) 1))
+
+;;; --- Auto Preview ---
+
+(defun gypsum-ui--auto-preview-maybe (palette)
+  "Preview PALETTE if `gypsum-auto-preview' is enabled."
+  (when gypsum-auto-preview
+    (gypsum-ui--preview-palette palette)))
+
 ;;; --- Transformation Selection ---
 
 (defun gypsum-ui--select-transform ()
@@ -371,6 +417,52 @@ Use `gypsum-preview-dismiss' to remove the preview."
        (gypsum-palette-change-background palette new-bg)))
     (_ palette)))
 
+;;; --- Transform Loop ---
+
+(defun gypsum-ui--transform-loop (initial-palette)
+  "Run the transform loop starting with INITIAL-PALETTE.
+Returns the final palette after all transforms.
+Supports undo via palette history stack."
+  (gypsum-ui--history-clear)
+  (gypsum-ui--history-push initial-palette)
+  (gypsum-ui--auto-preview-maybe initial-palette)
+  (let ((done nil)
+        result)
+    (while (not done)
+      (let* ((can-undo (gypsum-ui--history-can-undo-p))
+             (choices (if can-undo
+                          '("Apply transform"
+                            "Undo last transform"
+                            "Done - proceed to generate")
+                        '("Apply transform"
+                          "Done - proceed to generate")))
+             (choice (completing-read "Action: " choices nil t)))
+        (cond
+         ;; Apply transform
+         ((string= choice "Apply transform")
+          (let ((transform (gypsum-ui--select-transform)))
+            (when transform
+              (condition-case err
+                  (let ((new-palette (gypsum-ui--apply-transform
+                                      (gypsum-ui--history-current)
+                                      transform)))
+                    (gypsum-ui--history-push new-palette)
+                    (gypsum-ui--auto-preview-maybe new-palette))
+                (error
+                 (message "Transform failed: %s" (error-message-string err)))))))
+         ;; Undo
+         ((string= choice "Undo last transform")
+          (let ((prev-palette (gypsum-ui--history-pop)))
+            (when prev-palette
+              (gypsum-ui--auto-preview-maybe prev-palette)
+              (message "Undone. %d transform(s) applied."
+                       (1- (length gypsum-ui--palette-history))))))
+         ;; Done
+         ((string-prefix-p "Done" choice)
+          (setq result (gypsum-ui--history-current))
+          (setq done t)))))
+    result))
+
 ;;; --- Interactive Theme Generator ---
 
 ;;;###autoload
@@ -379,57 +471,65 @@ Use `gypsum-preview-dismiss' to remove the preview."
 
 Workflow:
 1. Choose an existing theme (preset or previously generated) or generate from seed
-2. Optionally apply a transformation (tint or derive variant)
-3. Preview and generate the theme file"
+2. Preview and optionally apply transformations (with undo support)
+3. Name and generate the theme file"
   (interactive)
-  (let* ((source (completing-read
-                  "Source: "
-                  '("Use existing theme" "Generate from seed")
-                  nil t))
-         palette)
-    ;; Step 1: Get base palette
-    (cond
-     ((string= source "Use existing theme")
-      (let* ((source-name (gypsum-ui--select-source))
-             (source-palette (gypsum-sources-get-palette source-name)))
-        (unless source-palette
-          (error "Could not load palette from: %s" source-name))
-        (setq palette source-palette)))
-     ((string= source "Generate from seed")
-      (let* ((seed (gypsum-ui--pick-color "Select seed color (becomes definition):"))
-             (variant (intern (completing-read "Variant: " '("light" "dark") nil t))))
-        (unless seed
-          (error "Seed color is required"))
-        (setq palette (gypsum-palette-generate seed variant)))))
-    ;; Step 2: Optionally transform
-    (when (y-or-n-p "Apply a transformation? ")
-      (let ((transform (gypsum-ui--select-transform)))
-        (when transform
-          (setq palette (gypsum-ui--apply-transform palette transform)))))
-    ;; Step 3: Preview
-    (when (y-or-n-p "Preview the theme? ")
-      (gypsum-ui--preview-palette palette)
-      (unless (y-or-n-p "Continue with generation? ")
-        (gypsum-preview-dismiss)
-        (user-error "Generation cancelled")))
-    ;; Step 4: Generate
-    (let* ((name (read-string "Theme name: "))
-           (output-dir (read-directory-name "Output directory: " gypsum-output-directory))
-           output-path)
-      (when (string-empty-p name)
-        (user-error "Theme name cannot be empty"))
-      (when (string-suffix-p "-theme" name)
-        (setq name (substring name 0 -6)))
-      (setq output-path (expand-file-name (format "%s-theme.el" name) output-dir))
-      (gypsum-generate-from-palette name palette output-path nil)
-      ;; Dismiss preview
-      (when gypsum-ui--preview-active-theme
-        (gypsum-preview-dismiss))
-      ;; Offer to load
-      (when (y-or-n-p "Load the generated theme? ")
-        (load-file output-path)
-        (load-theme (intern name) t))
-      (message "Generated: %s" output-path))))
+  ;; Capture original theme ONCE at the start
+  (setq gypsum-ui--preview-original-theme (car custom-enabled-themes))
+  (unwind-protect
+      (let* ((source (completing-read
+                      "Source: "
+                      '("Use existing theme" "Generate from seed")
+                      nil t))
+             base-palette
+             final-palette)
+        ;; Step 1: Get base palette
+        (cond
+         ((string= source "Use existing theme")
+          (let* ((source-name (gypsum-ui--select-source))
+                 (source-palette (gypsum-sources-get-palette source-name)))
+            (unless source-palette
+              (error "Could not load palette from: %s" source-name))
+            (setq base-palette source-palette)))
+         ((string= source "Generate from seed")
+          (let* ((seed (gypsum-ui--pick-color "Select seed color (becomes definition):"))
+                 (variant (intern (completing-read "Variant: " '("light" "dark") nil t))))
+            (unless seed
+              (error "Seed color is required"))
+            (setq base-palette (gypsum-palette-generate seed variant)))))
+        ;; Step 2: Transform loop (includes auto-preview)
+        (setq final-palette (gypsum-ui--transform-loop base-palette))
+        ;; Step 3: Generate
+        (let* ((name (read-string "Theme name: "))
+               (output-dir (read-directory-name "Output directory: " gypsum-output-directory))
+               output-path)
+          (when (string-empty-p name)
+            (user-error "Theme name cannot be empty"))
+          (when (string-suffix-p "-theme" name)
+            (setq name (substring name 0 -6)))
+          (setq output-path (expand-file-name (format "%s-theme.el" name) output-dir))
+          (gypsum-generate-from-palette name final-palette output-path nil)
+          ;; Dismiss preview (will be replaced by loaded theme)
+          (when gypsum-ui--preview-active-theme
+            (disable-theme gypsum-ui--preview-active-theme)
+            (setq gypsum-ui--preview-active-theme nil))
+          ;; Offer to load
+          (if (y-or-n-p "Load the generated theme? ")
+              (progn
+                (load-file output-path)
+                (load-theme (intern name) t)
+                ;; Don't restore old theme - user is loading the new one
+                (setq gypsum-ui--preview-original-theme nil))
+            ;; User declined to load - restore original
+            (when gypsum-ui--preview-original-theme
+              (enable-theme gypsum-ui--preview-original-theme)))
+          (message "Generated: %s" output-path)))
+    ;; Cleanup on any exit (error, C-g, etc.)
+    (gypsum-ui--history-clear)
+    (when gypsum-ui--preview-active-theme
+      (disable-theme gypsum-ui--preview-active-theme)
+      (setq gypsum-ui--preview-active-theme nil))
+    (setq gypsum-ui--preview-current-palette nil)))
 
 ;;;###autoload
 (defun gypsum-from-source ()
