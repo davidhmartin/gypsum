@@ -13,9 +13,7 @@ Once satisfied with the results, the user may save the theme to the custom theme
 
 > "If everything is highlighted, nothing is highlighted."
 
-Traditional syntax highlighting colors almost every token—keywords, variables, operators, punctuation. This defeats the purpose because nothing stands out. Gypsum takes a different approach: **highlight only what matters**.
-
-Tonsky's Alabaster theme highlights exactly **four semantic categories**:
+Gypsum generates themes which highlight exactly **four semantic categories**:
 
 1. **Strings** (green) - literals, regexps, symbols
 2. **Constants** (purple) - numbers, booleans, language constants

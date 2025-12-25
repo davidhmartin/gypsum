@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2025
 
-;; Author: David
+;; Author: David Martin
 ;; URL: https://github.com/davidhmartin/gypsum
 ;; Version: 2.0.0
 ;; Package-Requires: ((emacs "27.1"))

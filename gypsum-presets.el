@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2025
 
-;; Author: David
+;; Author: David Martin
 ;; Keywords: faces, theme
 
 ;; This file is part of Gypsum.
