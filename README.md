@@ -1,6 +1,13 @@
 # Gypsum
 
-An Emacs theme generator based on Nikita Tonsky's [Alabaster](https://github.com/tonsky/vscode-theme-alabaster) minimal syntax highlighting philosophy.
+Gypsum is an Emacs theme generator based on the minimal syntax highlighting approach created by
+Nikita Tonsky and exemplified by his [Alabaster](https://github.com/tonsky/vscode-theme-alabaster) theme. 
+Gypsum provides an interactive means of generating an emacs theme
+based on these principles. Creating a gypsum theme starts with a selecting a base color or specifying 
+an existing gypsum-generated theme. The user is then prompted to modify the color scheme by applying
+any number of [transformations](#Transformations). 
+Once satisfied with the results, the user may save the theme to the custom theme directory. 
+
 
 ## Philosophy
 
@@ -8,7 +15,7 @@ An Emacs theme generator based on Nikita Tonsky's [Alabaster](https://github.com
 
 Traditional syntax highlighting colors almost every token—keywords, variables, operators, punctuation. This defeats the purpose because nothing stands out. Gypsum takes a different approach: **highlight only what matters**.
 
-Gypsum themes highlight exactly **four semantic categories**:
+Tonsky's Alabaster theme highlights exactly **four semantic categories**:
 
 1. **Strings** (green) - literals, regexps, symbols
 2. **Constants** (purple) - numbers, booleans, language constants
@@ -17,7 +24,17 @@ Gypsum themes highlight exactly **four semantic categories**:
 
 Everything else—keywords, operators, variable uses, function calls—uses the default foreground color. This is intentional.
 
+For the full rationale behind this approach, see Nikita Tonsky's blog post: [Syntax Highlighting Is a Waste of an Opportunity](https://tonsky.me/blog/syntax-highlighting/)
+
+
 ## Installation
+
+### Emacs version 29+
+
+```elisp
+(use-package gypsum
+  :vc (:fetcher github :repo "davidhmartin/gypsum"))
+```
 
 ### Using straight.el with use-package
 
@@ -69,7 +86,7 @@ Transform Loop:
 Name & Save → Load
 ```
 
-### Available Transformations
+### Transformations
 
 | Transform | Description |
 |-----------|-------------|
@@ -220,10 +237,6 @@ Gypsum generates specifications for 170+ faces including:
 - Tree-sitter
 - Dired, Eshell
 - And many more...
-
-## Philosophy Reference
-
-For the full rationale behind this approach, see Nikita Tonsky's blog post: [Syntax Highlighting Is a Waste of an Opportunity](https://tonsky.me/blog/syntax-highlighting/)
 
 ## License
 
