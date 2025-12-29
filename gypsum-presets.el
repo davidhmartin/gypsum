@@ -63,6 +63,13 @@
 ;;   :diff-add-bg - Added lines background
 ;;   :diff-del-bg - Deleted lines background
 ;;   :diff-chg-bg - Changed lines background
+;;
+;; Terminal colors (ANSI 16-color palette):
+;;   :term-black, :term-red, :term-green, :term-yellow
+;;   :term-blue, :term-magenta, :term-cyan, :term-white
+;;   :term-bright-black, :term-bright-red, :term-bright-green
+;;   :term-bright-yellow, :term-bright-blue, :term-bright-magenta
+;;   :term-bright-cyan, :term-bright-white
 
 ;;; Alabaster palette
 ;;
@@ -94,7 +101,24 @@
     ;; Diff colors
     :diff-add-bg "#D4EDDA"
     :diff-del-bg "#F8D7DA"
-    :diff-chg-bg "#FFF3CD")
+    :diff-chg-bg "#FFF3CD"
+    ;; Terminal colors (ANSI)
+    :term-black "#000000"
+    :term-red "#AA3731"
+    :term-green "#448C27"
+    :term-yellow "#CB9000"
+    :term-blue "#325CC0"
+    :term-magenta "#7A3E9D"
+    :term-cyan "#0083B2"
+    :term-white "#F7F7F7"
+    :term-bright-black "#777777"
+    :term-bright-red "#E51400"
+    :term-bright-green "#5DA713"
+    :term-bright-yellow "#F09000"
+    :term-bright-blue "#007ACC"
+    :term-bright-magenta "#9B4DCA"
+    :term-bright-cyan "#00A8C6"
+    :term-bright-white "#FFFFFF")
   "Alabaster light palette - the original Tonsky colors.")
 
 (defconst gypsum-preset-alabaster-dark
@@ -121,7 +145,24 @@
     ;; Diff colors
     :diff-add-bg "#2D4A2D"
     :diff-del-bg "#4A2D2D"
-    :diff-chg-bg "#4A4A2D")
+    :diff-chg-bg "#4A4A2D"
+    ;; Terminal colors (ANSI)
+    :term-black "#1E1E1E"
+    :term-red "#E5786D"
+    :term-green "#98C379"
+    :term-yellow "#E5C07B"
+    :term-blue "#61AFEF"
+    :term-magenta "#C678DD"
+    :term-cyan "#56B6C2"
+    :term-white "#D4D4D4"
+    :term-bright-black "#808080"
+    :term-bright-red "#F44747"
+    :term-bright-green "#B5E890"
+    :term-bright-yellow "#FFD700"
+    :term-bright-blue "#82CFFF"
+    :term-bright-magenta "#DA8EE7"
+    :term-bright-cyan "#7FDBF0"
+    :term-bright-white "#FFFFFF")
   "Alabaster dark palette - derived from light variant.")
 
 ;;; Preset registry
@@ -154,7 +195,12 @@ Returns a list of preset name symbols."
     :background :foreground :fg-dim :bg-alt
     :selection :highlight :find-hl
     :error :warning :success
-    :diff-add-bg :diff-del-bg :diff-chg-bg)
+    :diff-add-bg :diff-del-bg :diff-chg-bg
+    :term-black :term-red :term-green :term-yellow
+    :term-blue :term-magenta :term-cyan :term-white
+    :term-bright-black :term-bright-red :term-bright-green
+    :term-bright-yellow :term-bright-blue :term-bright-magenta
+    :term-bright-cyan :term-bright-white)
   "List of required keys in a palette plist.")
 
 (defun gypsum-palette-validate (palette)

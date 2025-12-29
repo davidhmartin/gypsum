@@ -19,6 +19,9 @@
 
 (require 'cl-lib)
 
+;; Forward declaration to avoid circular dependency
+(declare-function gypsum-palette-ensure-term-colors "gypsum-palette")
+
 ;;; --- Face Specification Format ---
 
 ;; Each face spec is: (FACE-NAME . PROPERTIES)
@@ -326,8 +329,56 @@
     (eshell-ls-executable :fg string)
     (eshell-ls-archive :fg constant)
 
-    ;;; === Term / Ansi - these need special handling ===
-    ;; Term colors will use actual color values, handled separately
+    ;;; === Term / Ansi / VTerm ===
+    ;; Standard 16-color ANSI palette for terminal emulators
+    (term-color-black :fg term-black :bg term-black)
+    (term-color-red :fg term-red :bg term-red)
+    (term-color-green :fg term-green :bg term-green)
+    (term-color-yellow :fg term-yellow :bg term-yellow)
+    (term-color-blue :fg term-blue :bg term-blue)
+    (term-color-magenta :fg term-magenta :bg term-magenta)
+    (term-color-cyan :fg term-cyan :bg term-cyan)
+    (term-color-white :fg term-white :bg term-white)
+    ;; Bright variants
+    (term-color-bright-black :fg term-bright-black :bg term-bright-black)
+    (term-color-bright-red :fg term-bright-red :bg term-bright-red)
+    (term-color-bright-green :fg term-bright-green :bg term-bright-green)
+    (term-color-bright-yellow :fg term-bright-yellow :bg term-bright-yellow)
+    (term-color-bright-blue :fg term-bright-blue :bg term-bright-blue)
+    (term-color-bright-magenta :fg term-bright-magenta :bg term-bright-magenta)
+    (term-color-bright-cyan :fg term-bright-cyan :bg term-bright-cyan)
+    (term-color-bright-white :fg term-bright-white :bg term-bright-white)
+    ;; Term mode UI faces
+    (term :fg foreground :bg background)
+    (term-bold :fg foreground :weight bold)
+
+    ;;; === Ansi-color (used by compilation, shell, etc.) ===
+    (ansi-color-black :fg term-black :bg term-black)
+    (ansi-color-red :fg term-red :bg term-red)
+    (ansi-color-green :fg term-green :bg term-green)
+    (ansi-color-yellow :fg term-yellow :bg term-yellow)
+    (ansi-color-blue :fg term-blue :bg term-blue)
+    (ansi-color-magenta :fg term-magenta :bg term-magenta)
+    (ansi-color-cyan :fg term-cyan :bg term-cyan)
+    (ansi-color-white :fg term-white :bg term-white)
+    (ansi-color-bright-black :fg term-bright-black :bg term-bright-black)
+    (ansi-color-bright-red :fg term-bright-red :bg term-bright-red)
+    (ansi-color-bright-green :fg term-bright-green :bg term-bright-green)
+    (ansi-color-bright-yellow :fg term-bright-yellow :bg term-bright-yellow)
+    (ansi-color-bright-blue :fg term-bright-blue :bg term-bright-blue)
+    (ansi-color-bright-magenta :fg term-bright-magenta :bg term-bright-magenta)
+    (ansi-color-bright-cyan :fg term-bright-cyan :bg term-bright-cyan)
+    (ansi-color-bright-white :fg term-bright-white :bg term-bright-white)
+
+    ;;; === VTerm ===
+    (vterm-color-black :fg term-black :bg term-black)
+    (vterm-color-red :fg term-red :bg term-red)
+    (vterm-color-green :fg term-green :bg term-green)
+    (vterm-color-yellow :fg term-yellow :bg term-yellow)
+    (vterm-color-blue :fg term-blue :bg term-blue)
+    (vterm-color-magenta :fg term-magenta :bg term-magenta)
+    (vterm-color-cyan :fg term-cyan :bg term-cyan)
+    (vterm-color-white :fg term-white :bg term-white)
 
     ;;; === Avy ===
     (avy-lead-face :fg foreground :bg find-hl)
@@ -578,9 +629,13 @@ Returns a form suitable for `custom-theme-set-faces'."
 (defun gypsum-faces-generate (palette)
   "Generate all face specifications for PALETTE.
 Returns a list suitable for `custom-theme-set-faces'."
-  (mapcar (lambda (face-def)
-            (gypsum-faces--build-face-spec face-def palette))
-          gypsum-face-specs))
+  ;; Ensure terminal colors are present (adds defaults if missing)
+  (let ((complete-palette (if (fboundp 'gypsum-palette-ensure-term-colors)
+                              (gypsum-palette-ensure-term-colors palette)
+                            palette)))
+    (mapcar (lambda (face-def)
+              (gypsum-faces--build-face-spec face-def complete-palette))
+            gypsum-face-specs)))
 
 (provide 'gypsum-faces)
 

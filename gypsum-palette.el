@@ -21,6 +21,60 @@
 (require 'gypsum-color)
 (require 'gypsum-presets)
 
+;;; Ensuring complete palettes
+
+(defconst gypsum-palette--default-term-colors-light
+  '(:term-black "#000000"
+    :term-red "#AA3731"
+    :term-green "#448C27"
+    :term-yellow "#CB9000"
+    :term-blue "#325CC0"
+    :term-magenta "#7A3E9D"
+    :term-cyan "#0083B2"
+    :term-white "#F7F7F7"
+    :term-bright-black "#777777"
+    :term-bright-red "#E51400"
+    :term-bright-green "#5DA713"
+    :term-bright-yellow "#F09000"
+    :term-bright-blue "#007ACC"
+    :term-bright-magenta "#9B4DCA"
+    :term-bright-cyan "#00A8C6"
+    :term-bright-white "#FFFFFF")
+  "Default terminal colors for light palettes.")
+
+(defconst gypsum-palette--default-term-colors-dark
+  '(:term-black "#1E1E1E"
+    :term-red "#E5786D"
+    :term-green "#98C379"
+    :term-yellow "#E5C07B"
+    :term-blue "#61AFEF"
+    :term-magenta "#C678DD"
+    :term-cyan "#56B6C2"
+    :term-white "#D4D4D4"
+    :term-bright-black "#808080"
+    :term-bright-red "#F44747"
+    :term-bright-green "#B5E890"
+    :term-bright-yellow "#FFD700"
+    :term-bright-blue "#82CFFF"
+    :term-bright-magenta "#DA8EE7"
+    :term-bright-cyan "#7FDBF0"
+    :term-bright-white "#FFFFFF")
+  "Default terminal colors for dark palettes.")
+
+(defun gypsum-palette-ensure-term-colors (palette)
+  "Ensure PALETTE has terminal color keys, adding defaults if missing.
+Returns a new palette with terminal colors guaranteed to be present."
+  (let* ((result (copy-sequence palette))
+         (variant (plist-get palette :variant))
+         (defaults (if (eq variant 'dark)
+                       gypsum-palette--default-term-colors-dark
+                     gypsum-palette--default-term-colors-light)))
+    ;; Add any missing terminal color keys
+    (cl-loop for (key value) on defaults by #'cddr do
+             (unless (plist-get result key)
+               (setq result (plist-put result key value))))
+    result))
+
 ;;; Tinting modes
 ;;
 ;; Three ways to tint a palette:
@@ -149,6 +203,8 @@ Adjusts lightness and saturation of colors for dark background display."
       (let ((color (plist-get light-palette key)))
         (setq result (plist-put result key
                                 (gypsum-palette--dark-diff-bg color)))))
+    ;; Adjust terminal colors for dark background
+    (setq result (gypsum-palette--derive-term-colors-dark result light-palette))
     result))
 
 (defun gypsum-palette--dark-background (light-palette)
@@ -244,6 +300,8 @@ Adjusts lightness and saturation of colors for light background display."
       (let ((color (plist-get dark-palette key)))
         (setq result (plist-put result key
                                 (gypsum-palette--light-diff-bg color)))))
+    ;; Adjust terminal colors for light background
+    (setq result (gypsum-palette--derive-term-colors-light result dark-palette))
     result))
 
 (defun gypsum-palette--light-background (dark-palette)
@@ -276,6 +334,113 @@ Adjusts lightness and saturation of colors for light background display."
   "Generate light diff background from DARK-DIFF-BG."
   (let ((hsl (gypsum-color-hex-to-hsl dark-diff-bg)))
     (gypsum-color-hsl-to-hex (nth 0 hsl) 50.0 90.0)))
+
+;;; Terminal color derivation
+
+(defun gypsum-palette--derive-term-colors-dark (result light-palette)
+  "Derive terminal colors for dark RESULT from LIGHT-PALETTE."
+  ;; Black becomes the dark background
+  (setq result (plist-put result :term-black
+                          (plist-get result :background)))
+  ;; White becomes light foreground
+  (setq result (plist-put result :term-white
+                          (plist-get result :foreground)))
+  ;; Bright black is dimmed foreground
+  (setq result (plist-put result :term-bright-black
+                          (plist-get result :fg-dim)))
+  ;; Bright white is full white
+  (setq result (plist-put result :term-bright-white "#FFFFFF"))
+  ;; Adjust the main colors for dark background readability
+  (dolist (key '(:term-red :term-green :term-yellow
+                 :term-blue :term-magenta :term-cyan))
+    (let ((color (plist-get light-palette key)))
+      (when color
+        (setq result (plist-put result key
+                                (gypsum-palette--adjust-for-dark color))))))
+  ;; Adjust bright colors
+  (dolist (key '(:term-bright-red :term-bright-green :term-bright-yellow
+                 :term-bright-blue :term-bright-magenta :term-bright-cyan))
+    (let ((color (plist-get light-palette key)))
+      (when color
+        (setq result (plist-put result key
+                                (gypsum-palette--lighten-for-dark color))))))
+  result)
+
+(defun gypsum-palette--derive-term-colors-light (result dark-palette)
+  "Derive terminal colors for light RESULT from DARK-PALETTE."
+  ;; Black is true black for light background
+  (setq result (plist-put result :term-black "#000000"))
+  ;; White becomes the light background
+  (setq result (plist-put result :term-white
+                          (plist-get result :background)))
+  ;; Bright black is dimmed foreground
+  (setq result (plist-put result :term-bright-black
+                          (plist-get result :fg-dim)))
+  ;; Bright white is pure white
+  (setq result (plist-put result :term-bright-white "#FFFFFF"))
+  ;; Adjust the main colors for light background readability
+  (dolist (key '(:term-red :term-green :term-yellow
+                 :term-blue :term-magenta :term-cyan))
+    (let ((color (plist-get dark-palette key)))
+      (when color
+        (setq result (plist-put result key
+                                (gypsum-palette--adjust-for-light color))))))
+  ;; Adjust bright colors
+  (dolist (key '(:term-bright-red :term-bright-green :term-bright-yellow
+                 :term-bright-blue :term-bright-magenta :term-bright-cyan))
+    (let ((color (plist-get dark-palette key)))
+      (when color
+        (setq result (plist-put result key
+                                (gypsum-palette--brighten-for-light color))))))
+  result)
+
+(defun gypsum-palette--lighten-for-dark (color)
+  "Lighten COLOR for bright variants on dark backgrounds."
+  (let ((hsl (gypsum-color-hex-to-hsl color)))
+    (gypsum-color-hsl-to-hex
+     (nth 0 hsl)
+     (min 90.0 (+ (nth 1 hsl) 10.0))
+     (min 85.0 (+ (nth 2 hsl) 15.0)))))
+
+(defun gypsum-palette--brighten-for-light (color)
+  "Brighten COLOR for bright variants on light backgrounds."
+  (let ((hsl (gypsum-color-hex-to-hsl color)))
+    (gypsum-color-hsl-to-hex
+     (nth 0 hsl)
+     (min 100.0 (+ (nth 1 hsl) 20.0))
+     (max 35.0 (min 55.0 (nth 2 hsl))))))
+
+(defun gypsum-palette--derive-term-colors-for-bg (palette variant)
+  "Derive terminal colors for PALETTE with VARIANT (light or dark)."
+  (let ((result palette)
+        (bg (plist-get palette :background))
+        (fg (plist-get palette :foreground))
+        (fg-dim (plist-get palette :fg-dim)))
+    ;; Set black/white based on variant
+    (if (eq variant 'dark)
+        (progn
+          (setq result (plist-put result :term-black bg))
+          (setq result (plist-put result :term-white fg)))
+      (setq result (plist-put result :term-black "#000000"))
+      (setq result (plist-put result :term-white bg)))
+    ;; Bright black is always fg-dim
+    (setq result (plist-put result :term-bright-black fg-dim))
+    (setq result (plist-put result :term-bright-white "#FFFFFF"))
+    ;; Ensure main ANSI colors have good contrast with background
+    (dolist (key '(:term-red :term-green :term-yellow
+                   :term-blue :term-magenta :term-cyan))
+      (let ((color (plist-get result key)))
+        (when color
+          (setq result (plist-put result key
+                                  (gypsum-color-ensure-contrast color bg 4.5))))))
+    ;; Ensure bright colors have good contrast
+    (dolist (key '(:term-bright-red :term-bright-green :term-bright-yellow
+                   :term-bright-blue :term-bright-magenta :term-bright-cyan))
+      (let ((color (plist-get result key)))
+        (when color
+          (setq result (plist-put result key
+                                  (gypsum-color-ensure-contrast color bg 4.5))))))
+    result))
 
 ;;; Changing background color
 
@@ -332,6 +497,8 @@ Returns a new palette plist."
       (let ((color (plist-get result key)))
         (setq result (plist-put result key
                                 (gypsum-color-ensure-contrast color new-background 4.5)))))
+    ;; 8. Derive terminal colors based on new variant
+    (setq result (gypsum-palette--derive-term-colors-for-bg result new-variant))
     result))
 
 ;;; Seed-based generation (stub)

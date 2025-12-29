@@ -483,13 +483,13 @@ Workflow:
   (unwind-protect
       (let* ((source (completing-read
                       "Source: "
-                      '("Use existing theme" "Generate from seed")
+                      '("Derive from existing theme" "Generate from seed")
                       nil t))
              base-palette
              final-palette)
         ;; Step 1: Get base palette
         (cond
-         ((string= source "Use existing theme")
+         ((string= source "Derive from existing theme")
           (let* ((source-name (gypsum-ui--select-source))
                  (source-palette (gypsum-sources-get-palette source-name)))
             (unless source-palette

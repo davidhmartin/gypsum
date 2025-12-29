@@ -199,6 +199,19 @@ Can be used as a starting point for new themes.\")
                         (substring (symbol-name key) 1)
                         value)
                 bindings))))
+    ;; Terminal colors
+    (push ";; Terminal colors (ANSI 16-color palette)" bindings)
+    (dolist (key '(:term-black :term-red :term-green :term-yellow
+                   :term-blue :term-magenta :term-cyan :term-white
+                   :term-bright-black :term-bright-red :term-bright-green
+                   :term-bright-yellow :term-bright-blue :term-bright-magenta
+                   :term-bright-cyan :term-bright-white))
+      (let ((value (plist-get palette key)))
+        (when (stringp value)
+          (push (format "(%s %S)"
+                        (substring (symbol-name key) 1)
+                        value)
+                bindings))))
     (concat "(let (" (mapconcat #'identity (nreverse bindings) "\n      ") ")\n\n")))
 
 ;;; --- Face Formatting ---
@@ -291,6 +304,8 @@ FACE-SPEC is (FACE-NAME ((CLASS ATTRS)))."
     (git-gutter:added . "=== Git gutter ===")
     (dired-directory . "=== Dired ===")
     (eshell-prompt . "=== Eshell ===")
+    (term-color-black . "=== Terminal / VTerm ===")
+    (avy-lead-face . "=== Avy ===")
     (tree-sitter-hl-face:keyword . "=== Tree-sitter ===")
     (web-mode-html-tag-face . "=== Web-mode ==="))
   "Alist mapping face names to section comments.")
